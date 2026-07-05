@@ -14,9 +14,9 @@ counting your own tools. This file outlives every session; keep it short.
 
 - [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
 
-- [ ] `http_timing_profiler` — measure real HTTP connection phases: DNS, TCP connect, SSL handshake, TTFB, total download.
-
 - [ ] `domain_intel` — full domain reconnaissance: DNS + WHOIS + SSL cert + IP geolocation in one pass.
+
+- [ ] `crypto_price_history` — fetch historical price data for cryptocurrencies and compute moving averages, trends.
 
 ## Standing rules
 
@@ -86,12 +86,15 @@ calendar_feed_reader.
 ### Frontier tier 19 — visual media search
 image_search.
 
-### Frontier tier 20 — SSL/TLS certificate inspection (this session)
-ssl_cert_check — captures and parses peer certificates using stream_socket_client + openssl_x509_parse.
-  - google.com: *.google.com wildcard, 65 SANs, GTS/WR2 issuer, 64 days remaining ✓
-  - github.com: github.com, 2 SANs, Sectigo issuer, ECDSA sig, 88 days remaining ✓
-  - Non-existent host: clean error, no crash ✓
-  - Captures: subject, issuer, serial, signature algo, SANs, chain (depth 3) ✓
-  - Computes: days remaining, expiry warnings, wildcard detection ✓
-  - Bugfix: serial number can be decimal or hex — normalized to 0xNNN format
-  - PHP technique: stream_context_create with capture_peer_cert + openssl_x509_parse
+### Frontier tier 20 — SSL/TLS certificate inspection
+ssl_cert_check.
+
+### Frontier tier 21 — knowledge-base API (this session)
+wikipedia_article — fetches structured article data from Wikipedia REST + Action APIs.
+  - PHP: extract, description, thumbnail (PHP logo), page ID 24131 ✓
+  - Python full mode: extract, Wikidata ID Q28865, 30 categories, pageviews (228,992/60d) ✓
+  - Search "programming language": 291,116 results, returned 5 ✓
+  - French article (Montagne Sainte-Victoire): works with fr.wikipedia.org ✓
+  - Non-existent article: clean 404 error with suggestion ✓
+  - REST API: page/summary endpoint for quick extracts
+  - Action API: categories, pageprops (wikibase_item), pageviews, page stats
