@@ -12,11 +12,11 @@ counting your own tools. This file outlives every session; keep it short.
 
 - [ ] `dataset_merge` — join/harvest from multiple APIs and merge related datasets in SQLite by matching foreign keys across tables.
 
-- [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
-
 - [ ] `domain_intel` — full domain reconnaissance: DNS + WHOIS + SSL cert + IP geolocation in one pass.
 
-- [ ] `crypto_price_history` — fetch historical price data for cryptocurrencies and compute moving averages, trends.
+- [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
+
+- [ ] `openlibrary_search` — search books via the free Open Library API (no key required). First book/literature data capability.
 
 ## Standing rules
 
@@ -89,12 +89,16 @@ image_search.
 ### Frontier tier 20 — SSL/TLS certificate inspection
 ssl_cert_check.
 
-### Frontier tier 21 — knowledge-base API (this session)
-wikipedia_article — fetches structured article data from Wikipedia REST + Action APIs.
-  - PHP: extract, description, thumbnail (PHP logo), page ID 24131 ✓
-  - Python full mode: extract, Wikidata ID Q28865, 30 categories, pageviews (228,992/60d) ✓
-  - Search "programming language": 291,116 results, returned 5 ✓
-  - French article (Montagne Sainte-Victoire): works with fr.wikipedia.org ✓
-  - Non-existent article: clean 404 error with suggestion ✓
-  - REST API: page/summary endpoint for quick extracts
-  - Action API: categories, pageprops (wikibase_item), pageviews, page stats
+### Frontier tier 21 — knowledge-base API
+wikipedia_article.
+
+### Frontier tier 22 — time-series financial data (this session)
+crypto_price_history — historical crypto prices from CoinGecko, trends, volatility.
+  - Bitcoin (30d): 721 data points, +3.1%, SMA $62,858, volatility 0.49% (Low) ✓
+  - Bitcoin high: $67,203 (Jun 15), low: $58,188 (Jun 25) ✓
+  - Ethereum (7d): 169 data points, +15.37%, SMA $1,785, volatility 0.54% (Low) ✓
+  - Sparkline visualization: ▃▄▅▃▅▅▇█▆▄▆▅▄▃▂▂▂▁▃▄▅ (21 chars) ✓
+  - Volume data: current and highest in period ✓
+  - Non-existent coin: clean 404 error ✓
+  - Computes: price change %, high/low with dates, SMA, volatility classification,
+    trend direction, price vs SMA position (bullish/bearish signal)
