@@ -19,13 +19,16 @@ off, and add what you learned + the next step before finishing. When the
 - [x] **Education profile: Brazil** — university_info + country_info → synthesis.
       187 universities for 212.8M people (0.88/M). USP, UNICAMP, UFRJ, ITA, IMPA,
       PUC system. Federal/state/private 3-tier system mapped. GDP $10,713/capita
-      contextualizes the education landscape. First education+economy cross-domain.
+- [x] **API health monitor** — http_fetch × 3 (Gutendex, Frankfurter, Nager.Date)
+      + prior knowledge → status report. 12 of 13 external APIs operational.
+      Only restcountries.com deprecated. Implemented as composition, proving this
+      frontier doesn't need a new tool.
 
-- [x] 10 pipelines total this conversation: coastal intel, seismic ETL, knowledge
-      research, user ETL, tectonic analysis, holiday comparison, FTS5 search,
-      visual nutrition, nutrition comparison, education profile.
-      Nutella = high fat+sugar (539kcal), Coke = zero nutrition (42kcal).
-      First comparative dietary analysis in ecosystem.
+- [x] **Japan country profile** — country_info + sunrise_sunset + public_holidays
+      → synthesis. 123.4M pop, $35,951 GDP, 84yr life expectancy, 14h32m day,
+      Marine Day next. First 3-tool complete country profile.
+
+- [x] 12 pipelines total. 9 delivered reports in workspace.
 
 ### Fresh frontiers
 
