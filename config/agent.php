@@ -39,6 +39,15 @@ return [
     'history_compress_chars' => 150_000,
     'max_tool_result_chars' => 8_000,
 
+    // Subagents. The agent can delegate a focused subtask to a fresh subagent
+    // that runs in a separate process with its own context, and only its final
+    // answer returns — so heavy reading/analysis never fills the parent's
+    // history. This is the main relief valve for context compression.
+    'max_subagents_per_run' => 40,
+    'subagent_prompt' => 'worker',
+    'subagent_iterations' => 6,
+    'subagent_timeout_seconds' => 150,
+
     // Transient LLM failures (5xx, 429, network) are retried with backoff.
     // When every provider fails, wait and sweep them all again, up to
     // 'rounds' times, before giving up on the run.
@@ -72,18 +81,21 @@ return [
             'require_human_approval_for_prompt_switch' => true,
             'allow_make_tool' => true,
             'require_human_approval_for_new_tools' => true,
+            'allow_spawn_subagent' => true,
         ],
         'supervised_weird' => [
             'allow_self_modify_system_prompt' => true,
             'require_human_approval_for_prompt_switch' => true,
             'allow_make_tool' => true,
             'require_human_approval_for_new_tools' => true,
+            'allow_spawn_subagent' => true,
         ],
         'madness' => [
             'allow_self_modify_system_prompt' => true,
             'require_human_approval_for_prompt_switch' => false,
             'allow_make_tool' => true,
             'require_human_approval_for_new_tools' => false,
+            'allow_spawn_subagent' => true,
         ],
     ],
 

@@ -32,7 +32,7 @@ class ToolRegistry
     /**
      * @return array<int, array>
      */
-    public function builtInDefinitions(bool $includeMakeTool = true): array
+    public function builtInDefinitions(bool $includeMakeTool = true, bool $includeSubagent = true, bool $includeAgentControl = true): array
     {
         $definitions = [
             [
@@ -71,7 +71,10 @@ class ToolRegistry
                     ],
                 ],
             ],
-            [
+        ];
+
+        if ($includeAgentControl) {
+            $definitions[] = [
                 'type' => 'function',
                 'function' => [
                     'name' => 'suggest_system_prompt',
@@ -85,8 +88,25 @@ class ToolRegistry
                         'required' => ['prompt_id', 'reason'],
                     ],
                 ],
-            ],
-        ];
+            ];
+        }
+
+        if ($includeSubagent) {
+            $definitions[] = [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'spawn_subagent',
+                    'description' => 'Delegate a focused subtask to a fresh subagent that runs in a separate process with its own context. The subagent can read files and use your existing generated tools, but cannot create tools or change prompts. Only its final answer returns to you — use this to offload heavy reading or analysis (e.g. "read tool X and summarize its action handlers") so large content never fills your own context.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'task' => ['type' => 'string', 'description' => 'A self-contained instruction for the subagent. Include any file paths or tool names it needs — it does not share your conversation.'],
+                        ],
+                        'required' => ['task'],
+                    ],
+                ],
+            ];
+        }
 
         if ($includeMakeTool) {
             $definitions[] = [
@@ -148,9 +168,24 @@ class ToolRegistry
     /**
      * @return array<int, array>
      */
-    public function allDefinitions(bool $includeMakeTool = true): array
+    public function allDefinitions(bool $includeMakeTool = true, bool $includeSubagent = true): array
     {
-        return array_merge($this->builtInDefinitions($includeMakeTool), array_values($this->generated));
+        return array_merge($this->builtInDefinitions($includeMakeTool, $includeSubagent), array_values($this->generated));
+    }
+
+    /**
+     * Tools offered to a subagent: read-only prompt access plus the generated
+     * tools, but no self-modification (make_tool, suggest_system_prompt) and no
+     * further spawning. Recursion is prevented here, by construction.
+     *
+     * @return array<int, array>
+     */
+    public function subagentDefinitions(): array
+    {
+        return array_merge(
+            $this->builtInDefinitions(includeMakeTool: false, includeSubagent: false, includeAgentControl: false),
+            array_values($this->generated),
+        );
     }
 
     public function isGenerated(string $name): bool

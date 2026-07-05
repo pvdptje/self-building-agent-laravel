@@ -9,6 +9,8 @@ use App\Agent\PromptRepository;
 use App\Agent\ToolMaker;
 use App\Agent\ToolRegistry;
 use Illuminate\Console\Command;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
+use Symfony\Component\Process\Process;
 
 class AgentRun extends Command
 {
@@ -57,6 +59,7 @@ class AgentRun extends Command
                 'autonomous_continue_message' => $config['autonomous_continue_message'],
                 'history_compress_chars' => $config['history_compress_chars'],
                 'max_tool_result_chars' => $config['max_tool_result_chars'],
+                'max_subagents_per_run' => $config['max_subagents_per_run'],
             ],
             approve: fn (string $question) => $this->confirm($question),
             output: function (string $type, string $message) {
@@ -71,6 +74,7 @@ class AgentRun extends Command
                     default => $this->line($message),
                 };
             },
+            spawnSubagent: fn (string $task) => $this->runSubagent($config, $task),
         );
 
         $forever = (bool) $this->option('forever');
@@ -101,5 +105,48 @@ class AgentRun extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Run one subagent task in a separate process and return its answer.
+     *
+     * @param array<string, mixed> $config
+     * @return array{answer?: string, error?: string}
+     */
+    private function runSubagent(array $config, string $task): array
+    {
+        $taskFile = tempnam(sys_get_temp_dir(), 'subagent_task_');
+        file_put_contents($taskFile, $task);
+
+        try {
+            $process = new Process([
+                PHP_BINARY,
+                base_path('artisan'),
+                'agent:subtask',
+                '--task-file='.$taskFile,
+                '--prompt='.$config['subagent_prompt'],
+                '--iterations='.$config['subagent_iterations'],
+            ]);
+            $process->setTimeout($config['subagent_timeout_seconds']);
+
+            try {
+                $process->run();
+            } catch (ProcessTimedOutException) {
+                return ['error' => 'The subagent timed out.'];
+            }
+
+            $lines = array_values(array_filter(array_map('trim', explode("\n", $process->getOutput()))));
+            $decoded = json_decode(end($lines) ?: '', true);
+
+            if (! is_array($decoded)) {
+                return ['error' => 'The subagent produced no readable answer.'];
+            }
+
+            return ($decoded['ok'] ?? false)
+                ? ['answer' => (string) ($decoded['answer'] ?? '')]
+                : ['error' => (string) ($decoded['error'] ?? 'The subagent failed.')];
+        } finally {
+            @unlink($taskFile);
+        }
     }
 }

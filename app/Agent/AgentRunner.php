@@ -12,15 +12,18 @@ class AgentRunner
 
     private int $toolsCreated = 0;
 
+    private int $subagentsSpawned = 0;
+
     private string $activePromptId = '';
 
     private ?array $pendingPrompt = null;
 
     /**
-     * @param array{allow_self_modify_system_prompt: bool, require_human_approval_for_prompt_switch: bool, allow_make_tool: bool, require_human_approval_for_new_tools: bool} $modeConfig
-     * @param array{max_prompt_switches_per_run: int, max_tools_created_per_run: int, autonomous_continue_message?: string, history_compress_chars?: int, max_tool_result_chars?: int} $limits
+     * @param array{allow_self_modify_system_prompt: bool, require_human_approval_for_prompt_switch: bool, allow_make_tool: bool, require_human_approval_for_new_tools: bool, allow_spawn_subagent?: bool} $modeConfig
+     * @param array{max_prompt_switches_per_run: int, max_tools_created_per_run: int, autonomous_continue_message?: string, history_compress_chars?: int, max_tool_result_chars?: int, max_subagents_per_run?: int} $limits
      * @param Closure(string): bool $approve Ask the human a yes/no question.
      * @param Closure(string, string): void $output Report progress to the human as (type, message). Types: iteration, thought, tool_call, tool_result, proposal, switch, system.
+     * @param Closure(string): array{answer?: string, error?: string}|null $spawnSubagent Run a subtask in a separate process and return its answer.
      */
     public function __construct(
         private LlmClient $llm,
@@ -33,7 +36,13 @@ class AgentRunner
         private array $limits,
         private Closure $approve,
         private Closure $output,
+        private ?Closure $spawnSubagent = null,
     ) {
+    }
+
+    private function subagentsEnabled(): bool
+    {
+        return $this->spawnSubagent !== null && ($this->modeConfig['allow_spawn_subagent'] ?? false);
     }
 
     public function activePromptId(): string
@@ -82,7 +91,7 @@ class AgentRunner
 
             $assistant = $this->llm->chat(
                 $messages,
-                $this->registry->allDefinitions($this->modeConfig['allow_make_tool'])
+                $this->registry->allDefinitions($this->modeConfig['allow_make_tool'], $this->subagentsEnabled())
             );
 
             $messages[] = $assistant;
@@ -212,6 +221,7 @@ class AgentRunner
                 'search_prompt_resources' => $this->prompts->search((string) ($arguments['query'] ?? '')),
                 'suggest_system_prompt' => $this->handleSuggestSystemPrompt($arguments),
                 'make_tool' => $this->handleMakeTool($arguments),
+                'spawn_subagent' => $this->handleSpawnSubagent($arguments),
                 default => $this->registry->isGenerated($name)
                     ? $this->registry->executeGenerated($name, $arguments)
                     : ['error' => "Unknown tool [{$name}]."],
@@ -219,6 +229,43 @@ class AgentRunner
         } catch (\Throwable $e) {
             return ['error' => "Tool [{$name}] threw: {$e->getMessage()}"];
         }
+    }
+
+    /**
+     * @param array<string, mixed> $arguments
+     */
+    private function handleSpawnSubagent(array $arguments): array
+    {
+        $task = trim((string) ($arguments['task'] ?? ''));
+
+        if ($task === '') {
+            return ['error' => 'spawn_subagent requires a non-empty task.'];
+        }
+
+        if (! $this->subagentsEnabled()) {
+            return ['error' => 'Subagents are not available in this run.'];
+        }
+
+        $max = $this->limits['max_subagents_per_run'] ?? 0;
+
+        if ($this->subagentsSpawned >= $max) {
+            return ['error' => 'The subagent limit for this run has been reached.'];
+        }
+
+        $this->subagentsSpawned++;
+        ($this->output)('system', "Spawning subagent #{$this->subagentsSpawned}: ".mb_substr($task, 0, 120));
+
+        $result = ($this->spawnSubagent)($task);
+        $ok = ! isset($result['error']);
+
+        $this->logger->subagent([
+            'iteration' => $this->iteration,
+            'task' => mb_substr($task, 0, 500),
+            'ok' => $ok,
+            'mode' => $this->mode,
+        ]);
+
+        return $ok ? ['answer' => $result['answer'] ?? ''] : ['error' => $result['error']];
     }
 
     /**

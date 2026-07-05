@@ -27,6 +27,14 @@ class AgentLogger
     /**
      * @param array<string, mixed> $entry
      */
+    public function subagent(array $entry): void
+    {
+        $this->append('subagent-lineage.jsonl', $entry);
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     */
     private function append(string $file, array $entry): void
     {
         if (! is_dir($this->directory)) {

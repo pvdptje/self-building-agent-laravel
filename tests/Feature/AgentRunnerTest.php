@@ -26,7 +26,7 @@ function fakeAssistantText(string $text): array
     return ['choices' => [['message' => ['role' => 'assistant', 'content' => $text]]]];
 }
 
-function makeRunner(string $mode, array $modeConfig, bool $approve, string $workDir, array $extraLimits = []): AgentRunner
+function makeRunner(string $mode, array $modeConfig, bool $approve, string $workDir, array $extraLimits = [], ?Closure $spawnSubagent = null): AgentRunner
 {
     $promptsDir = $workDir.'/prompts';
     $toolsDir = $workDir.'/tools';
@@ -52,6 +52,7 @@ function makeRunner(string $mode, array $modeConfig, bool $approve, string $work
         limits: array_merge(['max_prompt_switches_per_run' => 3, 'max_tools_created_per_run' => 10], $extraLimits),
         approve: fn (string $question) => $approve,
         output: fn (string $type, string $message) => null,
+        spawnSubagent: $spawnSubagent,
     );
 }
 
@@ -282,6 +283,107 @@ it('truncates oversized tool results before they enter the history', function ()
             if (($message['role'] ?? '') === 'tool') {
                 return str_contains($message['content'], 'truncated by host')
                     && mb_strlen($message['content']) < 150;
+            }
+        }
+
+        return false;
+    });
+});
+
+it('spawns a subagent and feeds its answer back to the model', function () {
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(fakeAssistantToolCall('spawn_subagent', ['task' => 'Read the game engine and tell me its action handlers.']))
+        ->push(fakeAssistantText('got it')),
+    ]);
+
+    $spawned = [];
+
+    $runner = makeRunner('madness', [
+        'allow_self_modify_system_prompt' => true,
+        'require_human_approval_for_prompt_switch' => false,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => false,
+        'allow_spawn_subagent' => true,
+    ], approve: false, workDir: $this->workDir,
+        extraLimits: ['max_subagents_per_run' => 5],
+        spawnSubagent: function (string $task) use (&$spawned) {
+            $spawned[] = $task;
+
+            return ['answer' => 'The handlers are: go, take, use, look.'];
+        });
+
+    $answer = $runner->run('Understand the engine.', 'creative_experiment', 5);
+
+    $lineage = readLineage($this->workDir, 'subagent-lineage.jsonl');
+
+    expect($answer)->toBe('got it')
+        ->and($spawned)->toHaveCount(1)
+        ->and($lineage)->toHaveCount(1)
+        ->and($lineage[0]['ok'])->toBeTrue();
+
+    Http::assertSent(function ($request) {
+        foreach ($request->data()['messages'] ?? [] as $message) {
+            if (($message['role'] ?? '') === 'tool' && str_contains($message['content'] ?? '', 'go, take, use, look')) {
+                return true;
+            }
+        }
+
+        return false;
+    });
+});
+
+it('does not offer spawn_subagent when no spawn closure is wired', function () {
+    Http::fake(['llm.test/*' => Http::sequence()->push(fakeAssistantText('done'))]);
+
+    $runner = makeRunner('madness', [
+        'allow_self_modify_system_prompt' => true,
+        'require_human_approval_for_prompt_switch' => false,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => false,
+        'allow_spawn_subagent' => true,
+    ], approve: false, workDir: $this->workDir); // no spawnSubagent closure
+
+    $runner->run('hi', 'creative_experiment', 2);
+
+    Http::assertSent(function ($request) {
+        $names = array_map(fn ($t) => $t['function']['name'], $request->data()['tools'] ?? []);
+
+        return ! in_array('spawn_subagent', $names, true);
+    });
+});
+
+it('stops spawning subagents after the fuse limit', function () {
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(fakeAssistantToolCall('spawn_subagent', ['task' => 'first']))
+        ->push(fakeAssistantToolCall('spawn_subagent', ['task' => 'second']))
+        ->push(fakeAssistantText('done')),
+    ]);
+
+    $calls = 0;
+
+    $runner = makeRunner('madness', [
+        'allow_self_modify_system_prompt' => true,
+        'require_human_approval_for_prompt_switch' => false,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => false,
+        'allow_spawn_subagent' => true,
+    ], approve: false, workDir: $this->workDir,
+        extraLimits: ['max_subagents_per_run' => 1],
+        spawnSubagent: function (string $task) use (&$calls) {
+            $calls++;
+
+            return ['answer' => "answer to {$task}"];
+        });
+
+    $runner->run('spawn twice', 'creative_experiment', 5);
+
+    // The closure runs once; the second call is rejected by the fuse.
+    expect($calls)->toBe(1);
+
+    Http::assertSent(function ($request) {
+        foreach ($request->data()['messages'] ?? [] as $message) {
+            if (($message['role'] ?? '') === 'tool' && str_contains($message['content'] ?? '', 'subagent limit')) {
+                return true;
             }
         }
 
