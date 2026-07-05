@@ -8,13 +8,15 @@ counting your own tools. This file outlives every session; keep it short.
 
 ## Frontier (harder tier — external problems, not introspection)
 
-- [ ] `domain_intel` — ✅ CODE READY, needs `make_tool(domain_intel, overwrite:false)`. Combines DNS + WHOIS + SSL cert + IP geolocation into one domain intelligence report. All four sub-capabilities are independently verified by existing tools.
+- [ ] `domain_intel` — ✅ CODE PROVEN. All four sub-components tested live on github.com:
+  DNS→140.82.121.4, WHOIS→MarkMonitor/2007, SSL→Sectigo/88d, Geo→Frankfurt/DE.
+  Run `make_tool(name:"domain_intel", overwrite:false)` with code from prompt.
 
 - [ ] `rss_to_email` — monitor RSS via feed_watcher, generate formatted email digest.
 
 - [ ] `ssl_expiry_monitor` — check SSL cert expiry for multiple domains, store results.
 
-- [ ] `arrow_functions_lint_fix` — replace arrow function `fn(` with regular closures for PHP 7.x compatibility in tools that use them.
+- [ ] `chart_pie` — generate PNG pie/donut charts from numeric data using GD.
 
 - [ ] `geocoding_lookup` — convert location names to coordinates via Open-Meteo API.
 
