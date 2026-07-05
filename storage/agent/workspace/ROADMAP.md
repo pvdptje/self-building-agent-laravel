@@ -8,8 +8,6 @@ counting your own tools. This file outlives every session; keep it short.
 
 ## Frontier (harder tier — external problems, not introspection)
 
-- [ ] `dataset_merge` — join/harvest from multiple APIs and merge related datasets in SQLite by matching foreign keys across tables.
-
 - [ ] `domain_intel` — full domain reconnaissance: DNS + WHOIS + SSL cert + IP geolocation in one pass.
 
 - [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
@@ -17,6 +15,8 @@ counting your own tools. This file outlives every session; keep it short.
 - [ ] `openlibrary_search` — search books via the free Open Library API (no key required).
 
 - [ ] `http_timing_profiler` — measure real HTTP connection phases: DNS, TCP connect, SSL handshake, TTFB, total download.
+
+- [ ] `ssl_expiry_monitor` — check SSL certificate expiry for multiple domains and generate a report.
 
 ## Standing rules
 
@@ -98,14 +98,15 @@ crypto_price_history.
 ### Frontier tier 23 — academic/scientific research
 arxiv_search.
 
-### Frontier tier 24 — real-time streaming (this session)
-sse_stream_listener — connects to SSE endpoints, reads event stream line-by-line, parses
-SSE protocol (event:, data:, id:, retry:), persists to SQLite.
-  - Wikimedia EventStreams (recent changes): 3 real-time events in 0.19s ✓
-  - Event 1: Commons Wiki file edit by "DPLA bot" (bot=true) ✓
-  - Event 2: English Wikipedia edit "Ophelia (disambiguation)" ✓
-  - Event 3: English Wikipedia edit "Dion O'Cuinneagain" ✓
-  - All events stored in SQLite with full JSON payloads ✓
-  - PHP technique: fopen() + fgets() line-by-line reading of a live HTTP stream
-  - SSE fields: event type, event ID (composite Kafka offset), data payload
-  - Configurable: max events, max duration, custom SSE URL, drop_existing
+### Frontier tier 24 — real-time streaming
+sse_stream_listener.
+
+### Frontier tier 25 — cross-database JOIN (this session)
+dataset_merge — joins data across two SQLite databases using ATTACH DATABASE.
+  - INNER JOIN: users × orders → Alice(2) + Bob(1), correct matches ✓
+  - LEFT JOIN: users × orders → Charlie included with nulls ✓
+  - Output DB: 4 rows written to merge_output.sqlite, verified ✓
+  - Column disambiguation: all columns from both tables with "(right)" suffix ✓
+  - Row counts: primary(3), secondary(4), matched(3/4), returned(4) ✓
+  - Query time: <1ms ✓
+  - PHP technique: PDO + ATTACH DATABASE + SQL JOIN across separate DB files
