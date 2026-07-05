@@ -26,6 +26,8 @@ class AgentRun extends Command
     public function handle(): int
     {
         $config = config('agent');
+        ini_set('memory_limit', $config['host_memory_limit']);
+
         $mode = $this->option('mode') ?: $config['mode'];
 
         if (! isset($config['modes'][$mode])) {
@@ -75,6 +77,9 @@ class AgentRun extends Command
                 };
             },
             spawnSubagent: fn (string $task) => $this->runSubagent($config, $task),
+            checkpoint: $this->option('forever')
+                ? fn (int $iteration) => $this->gitCheckpoint($config, $iteration)
+                : null,
         );
 
         $forever = (bool) $this->option('forever');
@@ -105,6 +110,70 @@ class AgentRun extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Snapshot the agent's work to git at an open-ended checkpoint. Stages
+     * tracked changes plus the generated tools and workspace markdown (roadmap,
+     * digests), which are gitignored, then commits to the current branch. The
+     * noisy lineage .jsonl and any binary/SQLite workspace files are left out.
+     *
+     * Every git failure is swallowed and reported as a warning: a checkpoint
+     * that cannot commit must never interrupt the run.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function gitCheckpoint(array $config, int $iteration): void
+    {
+        $root = base_path();
+
+        try {
+            $this->runGit(['add', '-A'], $root);
+            $this->runGit(['add', '-f', '--', $config['generated_tools_path']], $root);
+
+            $workspace = storage_path('agent/workspace');
+            $markdown = glob($workspace.'/*.md') ?: [];
+
+            if ($markdown !== []) {
+                $this->runGit(array_merge(['add', '-f', '--'], $markdown), $root);
+            }
+
+            // Nothing staged? Skip the commit so a no-op checkpoint is silent
+            // instead of erroring with "nothing to commit".
+            $staged = new Process(['git', 'diff', '--cached', '--quiet'], $root);
+            $staged->run();
+
+            if ($staged->getExitCode() === 0) {
+                return;
+            }
+
+            $commit = $this->runGit(
+                ['commit', '--no-verify', '-m', "agent checkpoint: iteration {$iteration}"],
+                $root
+            );
+
+            if ($commit->isSuccessful()) {
+                $this->line("<fg=blue>⏵ Checkpoint committed at iteration {$iteration}.</>");
+            } else {
+                $this->warn('Checkpoint commit failed: '.trim($commit->getErrorOutput() ?: $commit->getOutput()));
+            }
+        } catch (\Throwable $e) {
+            $this->warn('Checkpoint skipped (git error): '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Run a git command in the given directory and return the finished process.
+     *
+     * @param array<int, string> $args
+     */
+    private function runGit(array $args, string $cwd): Process
+    {
+        $process = new Process(array_merge(['git'], $args), $cwd);
+        $process->setTimeout(60);
+        $process->run();
+
+        return $process;
     }
 
     /**

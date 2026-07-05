@@ -94,3 +94,21 @@ it('reports a permanently rejected run when no provider has a key', function () 
 
     $client->chat([['role' => 'user', 'content' => 'hi']], []);
 })->throws(RuntimeException::class, 'No LLM provider has an API key configured.');
+
+it('derives a character budget from the active provider context window', function () {
+    $client = new LlmClient(
+        [
+            'deepseek' => [
+                'base_url' => 'https://deepseek.test/v1',
+                'model' => 'm',
+                'api_key' => 'k',
+                'context_window_tokens' => 1_000_000,
+                'history_compress_ratio' => 0.75,
+                'token_char_estimate' => 4.0,
+            ],
+        ],
+        ['deepseek'],
+    );
+
+    expect($client->contextCharBudget())->toBe(3_000_000);
+});

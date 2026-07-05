@@ -113,7 +113,7 @@ class ToolRegistry
                 'type' => 'function',
                 'function' => [
                     'name' => 'make_tool',
-                    'description' => 'Create a new PHP function tool and save it to disk. The new tool becomes available on the next iteration. The host may require human approval.',
+                    'description' => 'Create a new PHP function tool and save it to disk, or replace an existing one with overwrite: true. The tool becomes available on the next iteration. The host may require human approval.',
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
@@ -126,6 +126,10 @@ class ToolRegistry
                             'code' => [
                                 'type' => 'string',
                                 'description' => 'PHP function body only: no <?php tag and no function wrapper. Parameters from the schema are available as PHP variables (e.g. $sides). Must return a value.',
+                            ],
+                            'overwrite' => [
+                                'type' => 'boolean',
+                                'description' => 'Replace the existing generated tool of the same name with this improved version. Prefer this over creating _v2/_fixed variants.',
                             ],
                         ],
                         'required' => ['name', 'description', 'parameters_schema', 'code'],

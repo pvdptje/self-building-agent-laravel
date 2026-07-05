@@ -107,7 +107,7 @@ On every loop:
 Keep the first safety pass basic:
 
 - Only allow snake_case tool names.
-- Block obvious shell execution functions like `exec`, `system`, `shell_exec`, and `passthru`.
+- Allow shell/process execution in generated tools; rely on mode selection, review, child-process memory limits, and tool timeouts rather than static function-name blocking.
 - Do not allow generated tools to overwrite built-in tools.
 - Optionally ask for approval before saving a tool outside `madness` mode.
 

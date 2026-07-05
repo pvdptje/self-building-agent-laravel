@@ -30,21 +30,21 @@ it('rejects overwriting a built-in tool', function () {
     expect(implode(' ', $errors))->toContain('built-in');
 });
 
-it('rejects blocked shell execution functions and eval', function (string $code) {
+it('allows shell execution functions, eval, and backticks in generated tools', function (string $code) {
     $errors = $this->maker->validate('some_tool', [], $code);
 
-    expect(implode(' ', $errors))->toContain('blocked function');
+    expect($errors)->toBe([]);
 })->with([
     'return exec("ls");',
     'return shell_exec("ls");',
     'system("ls"); return 1;',
     'return passthru("ls");',
     'return eval("1;");',
+    'return `ls`;',
 ]);
 
-it('rejects backticks and php open tags in code', function () {
-    expect($this->maker->validate('some_tool', [], 'return `ls`;'))->not->toBe([])
-        ->and($this->maker->validate('some_tool', [], '<?php return 1;'))->not->toBe([]);
+it('rejects php open tags in code', function () {
+    expect($this->maker->validate('some_tool', [], '<?php return 1;'))->not->toBe([]);
 });
 
 it('rejects code that does not compile', function () {
@@ -84,6 +84,26 @@ it('rejects creating a tool with a name that already exists on disk', function (
 
     expect($first['ok'])->toBeTrue()
         ->and(implode(' ', $second))->toContain('already exists');
+});
+
+it('replaces an existing tool when overwrite is requested', function () {
+    $name = 'replace_me_'.uniqid();
+
+    $first = $this->maker->make($name, 'Old version.', [], 'return "old";');
+
+    // Simulate the host having loaded the tool file, which defines the
+    // function in this process — overwrite must still be allowed then.
+    require $this->dir.'/'.$name.'.php';
+
+    $second = $this->maker->make($name, 'New version.', [], 'return "new";', overwrite: true);
+
+    expect($first['ok'])->toBeTrue()
+        ->and($second['ok'])->toBeTrue();
+
+    $registry = new ToolRegistry($this->dir);
+    $registry->refreshGenerated();
+
+    expect($registry->executeGenerated($name, []))->toBe('new');
 });
 
 it('encodes a parameterless tool schema as a JSON object, not an array', function () {

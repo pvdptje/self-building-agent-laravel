@@ -20,10 +20,11 @@ class AgentRunner
 
     /**
      * @param array{allow_self_modify_system_prompt: bool, require_human_approval_for_prompt_switch: bool, allow_make_tool: bool, require_human_approval_for_new_tools: bool, allow_spawn_subagent?: bool} $modeConfig
-     * @param array{max_prompt_switches_per_run: int, max_tools_created_per_run: int, autonomous_continue_message?: string, history_compress_chars?: int, max_tool_result_chars?: int, max_subagents_per_run?: int} $limits
+     * @param array{max_prompt_switches_per_run: int, max_tools_created_per_run: int, autonomous_continue_message?: string, history_compress_chars?: ?int, max_tool_result_chars?: int, max_subagents_per_run?: int} $limits
      * @param Closure(string): bool $approve Ask the human a yes/no question.
      * @param Closure(string, string): void $output Report progress to the human as (type, message). Types: iteration, thought, tool_call, tool_result, proposal, switch, system.
      * @param Closure(string): array{answer?: string, error?: string}|null $spawnSubagent Run a subtask in a separate process and return its answer.
+     * @param Closure(int): void|null $checkpoint Snapshot the work so far (e.g. a git commit). Called at each open-ended nudge with the current iteration.
      */
     public function __construct(
         private LlmClient $llm,
@@ -37,6 +38,7 @@ class AgentRunner
         private Closure $approve,
         private Closure $output,
         private ?Closure $spawnSubagent = null,
+        private ?Closure $checkpoint = null,
     ) {
     }
 
@@ -111,6 +113,13 @@ class AgentRunner
                     break;
                 }
 
+                // A journal answer with no tool call is a natural resting point:
+                // tools from prior iterations are on disk and the roadmap is
+                // current. Snapshot here before nudging the agent onward.
+                if ($this->checkpoint !== null) {
+                    ($this->checkpoint)($this->iteration);
+                }
+
                 ($this->output)('system', 'Open-ended mode: nudging the agent to pick its next move.');
 
                 $messages[] = [
@@ -163,7 +172,7 @@ class AgentRunner
      */
     private function compressHistoryIfNeeded(array &$messages, string $task): void
     {
-        $threshold = $this->limits['history_compress_chars'] ?? 150_000;
+        $threshold = $this->limits['history_compress_chars'] ?? $this->llm->contextCharBudget() ?? 150_000;
 
         if ($threshold <= 0) {
             return;
@@ -331,12 +340,14 @@ class AgentRunner
         $description = (string) ($arguments['description'] ?? '');
         $schema = is_array($arguments['parameters_schema'] ?? null) ? $arguments['parameters_schema'] : [];
         $code = (string) ($arguments['code'] ?? '');
+        $overwrite = (bool) ($arguments['overwrite'] ?? false);
 
         $logEntry = [
             'iteration' => $this->iteration,
             'tool' => $name,
             'description' => $description,
             'approved' => false,
+            'overwrite' => $overwrite,
             'mode' => $this->mode,
         ];
 
@@ -352,7 +363,7 @@ class AgentRunner
             return ['created' => false, 'errors' => ['The tool creation limit for this run has been reached.']];
         }
 
-        $errors = $this->toolMaker->validate($name, $schema, $code);
+        $errors = $this->toolMaker->validate($name, $schema, $code, $overwrite);
 
         if ($errors !== []) {
             $this->logger->toolChange($logEntry + ['errors' => $errors]);
@@ -361,16 +372,17 @@ class AgentRunner
         }
 
         if ($this->modeConfig['require_human_approval_for_new_tools']) {
-            ($this->output)('proposal', "Proposed tool [{$name}]: {$description}\n---\n{$code}\n---");
+            $verb = $overwrite ? 'replacement for tool' : 'tool';
+            ($this->output)('proposal', "Proposed {$verb} [{$name}]: {$description}\n---\n{$code}\n---");
 
-            if (! ($this->approve)("Save this new tool [{$name}]?")) {
+            if (! ($this->approve)("Save this {$verb} [{$name}]?")) {
                 $this->logger->toolChange($logEntry);
 
                 return ['created' => false, 'errors' => ['The human declined the new tool.']];
             }
         }
 
-        $result = $this->toolMaker->make($name, $description, $schema, $code);
+        $result = $this->toolMaker->make($name, $description, $schema, $code, $overwrite);
 
         if (! $result['ok']) {
             $this->logger->toolChange($logEntry + ['errors' => $result['errors']]);

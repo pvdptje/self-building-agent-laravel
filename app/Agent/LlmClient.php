@@ -14,7 +14,7 @@ class LlmClient
     private ?string $lastProvider = null;
 
     /**
-     * @param array<string, array{base_url: string, model: string, api_key: ?string}> $providers
+     * @param array<string, array{base_url: string, model: string, api_key: ?string, context_window_tokens?: int, history_compress_ratio?: float, token_char_estimate?: float}> $providers
      * @param array<int, string> $order
      * @param array{attempts_per_provider?: int, backoff_seconds?: array<int, int>, rounds?: int, round_backoff_seconds?: int} $retry
      */
@@ -30,6 +30,21 @@ class LlmClient
     public function activeProvider(): ?string
     {
         return $this->lastProvider ?? $this->usableProviders()[0] ?? null;
+    }
+
+    public function contextCharBudget(): ?int
+    {
+        $provider = $this->activeProvider();
+
+        if ($provider === null || empty($this->providers[$provider]['context_window_tokens'])) {
+            return null;
+        }
+
+        $tokens = (int) $this->providers[$provider]['context_window_tokens'];
+        $ratio = (float) ($this->providers[$provider]['history_compress_ratio'] ?? 0.75);
+        $charsPerToken = (float) ($this->providers[$provider]['token_char_estimate'] ?? 4.0);
+
+        return max(1, (int) floor($tokens * $charsPerToken * $ratio));
     }
 
     /**
@@ -101,7 +116,7 @@ class LlmClient
     }
 
     /**
-     * @param array{base_url: string, model: string, api_key: ?string} $config
+     * @param array{base_url: string, model: string, api_key: ?string, context_window_tokens?: int, history_compress_ratio?: float, token_char_estimate?: float} $config
      * @param array<int, array<string, mixed>> $messages
      * @param array<int, array<string, mixed>> $tools
      * @return array<string, mixed>

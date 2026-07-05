@@ -19,25 +19,29 @@ return [
     'autonomous_prompt' => 'environment_builder',
 
     // Used when agent:run is started with --forever and no task argument.
-    'autonomous_seed_task' => 'Begin an open-ended experiment. Build a small universe of useful, strange, and composable PHP tools. Decide your own next steps.',
-    'autonomous_continue_message' => 'Continue the open-ended experiment. Decide your next useful or surprising step. You may inspect prompts, create a small tool, use an existing tool, combine discoveries, or report a short journal note before continuing.',
+    'autonomous_seed_task' => 'Your mission: build the best agentic toolkit that has ever existed in PHP — for yourself. Read storage/agent/workspace/ROADMAP.md first (create it if missing) and take the top item. Everything PHP can do, you can do: HTTP requests, public APIs, HTML parsing, subprocesses. Prefer the boldest step you can verify.',
+    'autonomous_continue_message' => 'Continue the mission. Update ROADMAP.md with what you just accomplished, then take the next item — the boldest step you can verify with a real tool call. Attempt at least one thing the ecosystem has never done before. Do not add novelty/text-art tools unless they are a byproduct of a genuinely new capability.',
 
     // Safety fuses.
     'max_prompt_switches_per_run' => 10,
     'max_tools_created_per_run' => 25,
 
+    // Main agent process memory. This is separate from generated tool memory.
+    'host_memory_limit' => env('AGENT_HOST_MEMORY_LIMIT', '2G'),
+
     // Generated tools run in an isolated child PHP process with these limits,
     // so a runaway tool errors out instead of killing the agent loop.
-    'tool_memory_limit' => '64M',
-    'tool_timeout_seconds' => 10,
+    // The timeout leaves headroom for network tools (HTTP fetches, API calls).
+    'tool_memory_limit' => '128M',
+    'tool_timeout_seconds' => 45,
 
-    // Long-run survival. When the JSON-encoded history exceeds this many
-    // characters (~4 chars per token; 150k chars is roughly 37k tokens, safely
-    // inside a 64k-token window), the host asks the model to summarize the
-    // session and replaces the old messages with the summary. Tool results
-    // are capped so one giant output cannot blow the context in a single call.
-    'history_compress_chars' => 150_000,
-    'max_tool_result_chars' => 8_000,
+    // Long-run survival. If this is null, the host derives the compression
+    // threshold from the active provider's context_window_tokens. Override with
+    // AGENT_HISTORY_COMPRESS_CHARS when you want a hard threshold.
+    'history_compress_chars' => env('AGENT_HISTORY_COMPRESS_CHARS') === null
+        ? null
+        : (int) env('AGENT_HISTORY_COMPRESS_CHARS'),
+    'max_tool_result_chars' => (int) env('AGENT_MAX_TOOL_RESULT_CHARS', 50_000),
 
     // Subagents. The agent can delegate a focused subtask to a fresh subagent
     // that runs in a separate process with its own context, and only its final
@@ -65,13 +69,19 @@ return [
     'providers' => [
         'deepseek' => [
             'base_url' => 'https://api.deepseek.com/v1',
-            'model' => env('DEEPSEEK_MODEL', 'deepseek-chat'),
+            'model' => env('DEEPSEEK_MODEL', 'deepseek-v4-flash'),
             'api_key' => env('DEEPSEEK_API_KEY'),
+            'context_window_tokens' => (int) env('DEEPSEEK_CONTEXT_WINDOW_TOKENS', 1_000_000),
+            'history_compress_ratio' => (float) env('DEEPSEEK_HISTORY_COMPRESS_RATIO', 0.75),
+            'token_char_estimate' => (float) env('DEEPSEEK_TOKEN_CHAR_ESTIMATE', 4.0),
         ],
         'openai' => [
             'base_url' => 'https://api.openai.com/v1',
             'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
             'api_key' => env('OPENAI_API_KEY'),
+            'context_window_tokens' => (int) env('OPENAI_CONTEXT_WINDOW_TOKENS', 128_000),
+            'history_compress_ratio' => (float) env('OPENAI_HISTORY_COMPRESS_RATIO', 0.75),
+            'token_char_estimate' => (float) env('OPENAI_TOKEN_CHAR_ESTIMATE', 4.0),
         ],
     ],
 

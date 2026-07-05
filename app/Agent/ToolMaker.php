@@ -6,8 +6,6 @@ use Symfony\Component\Process\Process;
 
 class ToolMaker
 {
-    private const BLOCKED_PATTERN = '/\b(exec|system|shell_exec|passthru|proc_open|popen|pcntl_exec|eval|assert)\s*\(/i';
-
     /**
      * @param array<int, string> $builtInNames
      */
@@ -23,9 +21,9 @@ class ToolMaker
      * @param array<string, mixed> $schema
      * @return array{ok: bool, errors: array<int, string>, file?: string}
      */
-    public function make(string $name, string $description, array $schema, string $code): array
+    public function make(string $name, string $description, array $schema, string $code, bool $overwrite = false): array
     {
-        $errors = $this->validate($name, $schema, $code);
+        $errors = $this->validate($name, $schema, $code, $overwrite);
 
         if ($errors !== []) {
             return ['ok' => false, 'errors' => $errors];
@@ -51,7 +49,7 @@ class ToolMaker
      * @param array<string, mixed> $schema
      * @return array<int, string>
      */
-    public function validate(string $name, array $schema, string $code): array
+    public function validate(string $name, array $schema, string $code, bool $overwrite = false): array
     {
         $errors = [];
 
@@ -63,11 +61,17 @@ class ToolMaker
             $errors[] = "Tool name [{$name}] collides with a built-in tool.";
         }
 
-        if (is_file($this->generatedToolsPath.'/'.$name.'.php')) {
-            $errors[] = "A generated tool named [{$name}] already exists. Pick a different name.";
+        $existsOnDisk = is_file($this->generatedToolsPath.'/'.$name.'.php');
+
+        if (! $overwrite && $existsOnDisk) {
+            $errors[] = "A generated tool named [{$name}] already exists. Pass overwrite: true to replace it, or pick a different name.";
         }
 
-        if (function_exists($name)) {
+        // When overwriting, the function is expected to exist already (the host
+        // requires generated files to read their definitions). Only a name that
+        // collides with a function NOT coming from the tool being replaced is a
+        // real conflict.
+        if (function_exists($name) && ! ($overwrite && $existsOnDisk)) {
             $errors[] = "A PHP function named [{$name}] already exists. Pick a different name.";
         }
 
@@ -77,14 +81,6 @@ class ToolMaker
 
         if (str_contains($code, '<?php') || str_contains($code, '<?=')) {
             $errors[] = 'Tool code must be a function body only, without a <?php tag.';
-        }
-
-        if (preg_match(self::BLOCKED_PATTERN, $code, $match)) {
-            $errors[] = "Tool code calls blocked function [{$match[1]}]. Shell execution and eval are not allowed.";
-        }
-
-        if (str_contains($code, '`')) {
-            $errors[] = 'Tool code must not use backtick shell execution.';
         }
 
         foreach (array_keys($schema['properties'] ?? []) as $property) {
