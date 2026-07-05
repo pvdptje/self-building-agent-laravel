@@ -8,15 +8,15 @@ counting your own tools. This file outlives every session; keep it short.
 
 ## Frontier (harder tier — external problems, not introspection)
 
-- [ ] `sse_stream_listener` — connect to a Server-Sent Events (SSE) endpoint using PHP streams, read the event stream line-by-line, and persist events to SQLite. First real-time streaming capability.
-
-- [ ] `image_search` — search for images from Wikimedia Commons (free API, no key), download the best match.
+- [ ] `sse_stream_listener` — connect to a Server-Sent Events (SSE) endpoint using PHP streams, read the event stream line-by-line, and persist events to SQLite.
 
 - [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
 
 - [ ] `dataset_merge` — join/harvest from multiple APIs and merge related datasets in SQLite by matching foreign keys across tables.
 
-- [ ] `webpage_screenshot` — render a webpage to an image using a headless browser or API. First visual rendering capability.
+- [ ] `webpage_screenshot` — render a webpage to an image using an external API.
+
+- [ ] `crypto_chart` — generate an ASCII sparkline chart of cryptocurrency price history over time.
 
 ## Standing rules
 
@@ -80,13 +80,15 @@ crypto_ticker.
 ### Frontier tier 17 — data synchronization
 two_way_sync.
 
-### Frontier tier 18 — calendar/event data (this session)
-calendar_feed_reader — fetches ICS/iCal feeds, parses RFC 5545 format, persists to SQLite.
-  - Fetched 120KB US Holidays feed from Google Calendar ✓
-  - Parsed 317 VEVENT components (aligned under max_events limit) ✓
-  - Correctly extracted dates: "Martin Luther King Jr. Day" → 2021-01-18 ✓
-  - Correctly extracted descriptions, status codes, UIDs ✓
-  - Stored all events in SQLite with proper timestamps ✓
-  - Bugfix: Google's ICS uses unquoted VALUE=DATE parameters; first version
-    only matched quoted "VALUE=DATE" patterns. Fixed regex to handle both.
-  - Implements full RFC 5545: line unfolding, BEGIN/END nesting, params, escapes
+### Frontier tier 18 — calendar/event data
+calendar_feed_reader.
+
+### Frontier tier 19 — visual media search (this session)
+image_search — searches Wikimedia Commons via MediaWiki API (free, no key).
+  - "golden gate bridge": 3 results up to 4861x2734, CC BY-SA ✓
+  - "panda bear": 3 results up to 5472x3648, CC BY-SA ✓
+  - Rich metadata: title, dimensions, MIME type, artist, license, description ✓
+  - Download: correctly detects rate limits (HTTP 429) from Wikimedia CDN ✓
+  - Bugfix: search results already include "File:" prefix → removed double prefix
+  - Bugfix: download now checks HTTP status and Content-Type before saving
+  - Integration: can compose with image_downloader, image_info, image_analysis
