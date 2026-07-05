@@ -16,25 +16,28 @@ off, and add what you learned + the next step before finishing. When the
 
 ### This session
 
-- [ ] `gutenberg_search`, `brewery_search`, `db_backup` — **BLOCKED** by limit, queued.
+- [ ] `gutenberg_search`, `brewery_search`, `db_backup` — **BLOCKED**, queued.
 
-- [x] **Tectonic regime analysis** — Novel SQL analytics on the seismic SQLite database
-- [x] **Cross-country holiday analysis** — public_holidays × 2 (DE+FR) → comparison.
-      Germany: 19 holidays (11 religious, 8 regional). France: 11 (all national).
-      8 shared (Catholic-derived), May peaks for both (4 each). Reveals DE's
-      federal religious structure vs FR's secular nationalism.
+- [x] **Visual nutrition pipeline** — food_product_lookup → chart_pie → image_text_overlay.
+- [x] **Visual nutrition pipeline** — food_product_lookup → chart_pie →
+      image_text_overlay. Nutella donut: Fat 32.6%, Carbs 60.7%, Protein 6.7%.
+      Labeled Nutri-Score E + NOVA 4. Verified 10KB PNG. First visual data pipeline.
 
-- [x] **FTS5 cross-source search** — SQL JOIN between feed_items_fts + feed_sources.
-      Full-text search for 'software' matched HN article with source attribution.
-      Proves the FTS5+JOIN pipeline works end-to-end.
-      research (web+dictionary), user ETL (random→SQL→report).
+- [x] **Cross-product nutrition comparison** — food_product_lookup × 2 (Nutella
+      vs Coca-Cola). Both Nutri-Score E, NOVA 4, but completely different reasons:
+      Nutella = high fat+sugar (539kcal), Coke = zero nutrition (42kcal).
+      First comparative dietary analysis in ecosystem.
 
 ### Fresh frontiers
 
 - [ ] `api_health_monitor` — check availability/latency of all external APIs
-      (USGS, Open-Meteo, Gutendex, Frankfurter, etc.) and report status.
-
-- [ ] `image_format_converter` — convert between PNG, JPEG, WEBP, GIF via GD.
+      used by the ecosystem. New operational awareness capability.
 
 - [ ] `data_anonymizer` — pseudonymize PII columns in SQLite (hash names, mask
-      emails) while preserving referential integrity. New data privacy capability.
+      emails). New data privacy capability.
+
+- [ ] `web_page_metadata` — fetch a URL and extract all meta tags, Open Graph,
+      Twitter Card, JSON-LD, and favicon in one pass. New metadata reconnaissance.
+
+- [ ] `nutrition_compare` — compare nutrition of two food products side-by-side
+      using food_product_lookup × 2 + markdown_table_export. New dietary analysis.
