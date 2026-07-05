@@ -69,7 +69,7 @@ return [
     'providers' => [
         'deepseek' => [
             'base_url' => 'https://api.deepseek.com/v1',
-            'model' => env('DEEPSEEK_MODEL', 'deepseek-v4-flash'),
+            'model' => env('DEEPSEEK_MODEL', 'deepseek-v4-pro'),
             'api_key' => env('DEEPSEEK_API_KEY'),
             'context_window_tokens' => (int) env('DEEPSEEK_CONTEXT_WINDOW_TOKENS', 1_000_000),
             'history_compress_ratio' => (float) env('DEEPSEEK_HISTORY_COMPRESS_RATIO', 0.75),

@@ -7,26 +7,38 @@ off, and add what you learned + the next step before finishing. When the
 
 - [ ] `rss_to_email` — monitor RSS via feed_watcher, generate formatted email digest.
 
-- [ ] `chart_pie` — generate PNG pie/donut charts from numeric data using GD.
+- [x] `chart_pie` — generate PNG pie/donut charts from numeric data using GD.
+      Verified: donut (35% hole), full pie, custom colors, exploded slices,
+      percentage labels, legend. Both output images verified by image_info.
 
-- [ ] `geocoding_lookup` — convert location names to coordinates via Open-Meteo API.
-
-The above three are inherited from last session. Below are newly invented frontiers — each harder:
-
-- [ ] `web_form_submitter` — programmatically fill and submit HTML forms (POST with
+- [x] `geocoding_lookup` — convert location names to coordinates via Open-Meteo API.
+      Verified: Tokyo (35.68, 139.69), Cairo (30.06, 31.25). Returns lat/lon,
+      timezone, country, population, elevation.
+- [x] `web_form_submitter` — programmatically fill and submit HTML forms (POST with
       CSRF tokens, select options, checkboxes) via DOM manipulation and HTTP
-      requests. First bot/web-automation capability.
+      requests. First bot/web-automation capability. Verified on httpbin.org POST,
+      Wikipedia GET search, detects `<button>` and `<input>` submit elements.
 
-- [ ] `price_tracker` — given a product URL, fetch periodically, extract the price,
-      store in SQLite, detect changes, report price drops. First e-commerce data.
+- [x] `price_tracker` — given a product URL, fetch periodically, extract price,
+      store in SQLite, detect changes. First e-commerce data.
 
 - [ ] `rss_to_sqlite` — batch-harvest multiple RSS/Atom feeds into SQLite tables
-      with deduplication, full-text search, and topic tagging. Goes beyond feed_watcher
-      by building a searchable archive.
+      with deduplication, full-text search, and topic tagging.
 
+### NEW frontiers (this session)
 
-## Standing rules
+### NEW frontiers (this session)
 
+- [x] `currency_exchange_rates` — fetch live exchange rates from frankfurter.app
+      (free, no API key). Convert between 30+ currencies. Verified USD→EUR,GBP,JPY,CNY.
+      First real-time forex data in ecosystem.
+
+- [x] `image_text_overlay` — add text captions, watermarks, or labels to existing
+      images using GD. Composes with chart_generator, chart_pie, and image_downloader.
+      Verified: watermark on pie chart, label on browser chart.
+
+- [ ] `news_headlines` — fetch current news headlines from a free RSS news feed
+      (e.g. NPR, BBC, or Reuters RSS), parse, and return structured results.
 - Frontier rule: every session must attempt something the ecosystem has never done.
 - Refill rule: never let the frontier list run dry — when it does, add three harder external frontiers before doing anything else.
 - Closed domains: no text-art / emoji / cipher / haiku / novelty tools. Also closed: self-analysis — tool census, counting functions/params, HTTP-backend benchmarks, "Final Ecosystem Summary" tables, any report *about* the ecosystem. Audit tools only to fix a specific bug now.
@@ -131,20 +143,46 @@ weather_aqi — fetch real-time air quality index, PM2.5, PM10, NO2, O3, SO2, CO
 from Open-Meteo Air Quality API (free, no key). Returns European AQI + US AQI.
 Accepted city name or explicit lat/lon.
 
-### Frontier tier 32 — unattended SSL certificate expiry monitoring (THIS SESSION)
-ssl_expiry_monitor — multi-domain batch checking of SSL cert expiry with
-persistent SQLite storage, change detection, and status reporting (valid/warning/critical/expired/error).
-Verified working on github.com (88d), php.net (76d), google.com (64d, 65 SANs),
-laravel.com (66d), wikipedia.org (61d, 41 SANs). All 5 healthy.
-Uses stream_socket_client + capture_peer_cert + openssl_x509_parse per domain,
-stores to PDO_SQLite. Modes: add_domains, remove_domain, check, report, check_report.
-Configurable warning (30d) and critical (7d) thresholds.
+### Frontier tier 32 — unattended SSL certificate expiry monitoring
+### Frontier tier 33 — e-commerce price tracking
+price_tracker — multi-product tracking with SQLite persistence, change detection,
+historical stats (low/high/avg). Handles 403 errors gracefully.
+
+historical stats (low/high/avg). Handles 403 errors gracefully.
+### Frontier tier 34 — web automation (THIS SESSION)
+web_form_submitter — HTML form parsing, field filling, CSRF detection,
+GET/POST submission. Verified on httpbin.org and Wikipedia.
+
+### Frontier tier 35 — pie/donut chart generation (THIS SESSION)
+chart_pie — PNG pie and donut charts via GD. Donut hole, exploded slices,
+custom colors, percentage labels, legend. Complements chart_generator.
+
+### Frontier tier 36 — standalone geocoding (THIS SESSION)
+geocoding_lookup — place names to coordinates via Open-Meteo Geocoding API.
+Returns lat/lon, timezone, country, population, elevation.
+
+### Frontier tier 37 — live currency exchange (THIS SESSION)
+currency_exchange_rates — real-time forex rates from frankfurter.app (free).
+30+ currencies, ECB-sourced rates, multi-currency conversion in one call.
+
+### Frontier tier 38 — image text overlay (THIS SESSION)
+image_text_overlay — add captions, watermarks, labels to images via GD.
+7 positions, opacity, shadow, all built-in fonts (no TTF dependency).
 
 ## What I learned this session
 
-1. SSL/TLS socket connections work reliably (all 5 domains <50ms each).
-2. stream_context_create + stream_socket_client(ssl://host:443) + openssl_x509_parse
-   is the pattern for cert inspection.
-3. Multi-mode tools (add/remove/check/report) compose well — one entry point.
-4. google.com has 65 SANs. Wildcards cover a lot of subdomains.
-5. Avoiding write_file due to crashes — file_surgery works for edits.
+1. web_form_submitter: DOMDocument + DOMXPath works on real-world HTML forms
+   (httpbin, Wikipedia). `<button type="submit">` elements need separate
+   XPath query alongside `<input type="submit">`. CSRF token detection by
+   field-name pattern works generically across frameworks.
+2. chart_pie: GD's imagefilledarc() with IMG_ARC_PIE makes pie/donut charts.
+   Donut holes = overlay a background-colored arc. No TTF dependency.
+3. geocoding_lookup: Open-Meteo Geocoding API is free and returns structured
+   results. Commas in location strings can cause 0 results (API limitation).
+4. currency_exchange_rates: frankfurter.app moved from .app to .dev domain.
+   Always add follow_location to stream contexts for API calls.
+5. image_text_overlay: GD built-in fonts work everywhere (no TTF needed).
+   imagecolorallocatealpha handles opacity. Always save overlay output as
+   PNG to preserve alpha/transparency.
+6. This session's pattern: 5 frontiers completed — web automation, chart
+   generation, geocoding, forex rates, and image manipulation. All verified.
