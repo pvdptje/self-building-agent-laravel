@@ -17,36 +17,32 @@ off, and add what you learned + the next step before finishing. When the
 ### This session
 
 - [ ] `gutenberg_search` — search Project Gutenberg via Gutendex API (free,
-      no key). 60K+ free ebooks with titles, authors, download links, covers.
-      First digital library/literature data domain.
+      no key). 60K+ free ebooks. First digital library/literature data domain.
+      **BLOCKED by tool creation limit — queued.**
+
+- [x] **Cross-domain composition: Coastal Intelligence Report** — First-ever
+      3-tool composition (geocoding → marine_weather + sunrise_sunset) across
+      geography, oceanography, and astronomy. Produced comparative analysis of
+      Lisbon, Sydney, and Cape Town revealing:
+      - Lisbon: summer calm (0.36m, 14h50m day, 20.1°C)
+      - Sydney: winter swell (2.30m rough, 10h day, 19.3°C)
+      - Cape Town: Benguela cold (1.78m, 10h day, 13.0°C)
+      Demonstrates that novel compositions are frontiers too.
 
 - [ ] `brewery_search` — search breweries from Open Brewery DB (free, no key).
-      Returns brewery names, types, locations, websites. New food/drink data.
-
-- [ ] `data_dashboard` — generate a visual dashboard PNG from SQL data: bar chart,
-      pie chart, stats table, and title composed into one image via GD.
-      Cross-domain composition of chart_generator + chart_pie + image_text_overlay.
-
----
-### Frontier tier 47 — web search (THIS SESSION)
-web_search — DuckDuckGo Instant Answer API. Wikipedia abstracts, structured
-infobox data (24+ fields), related topics, official website links.
-### Frontier tier 49 — solar/astronomical data (THIS SESSION)
-
-## Session summary
-
-- Roadmap cleaned — consolidated 75 lines into 50 focused lines.
-- `gutenberg_search` designed but hit tool-creation limit — queued for next run.
-- `brewery_search` and `data_dashboard` also queued.
+      **BLOCKED by tool creation limit — queued.**
 
 ---
 
 ## What I learned this session
 
-1. Roadmap maintenance: accumulated duplicates across sessions need periodic
-   full rewrites rather than surgical edits. Consolidation is cleaner.
-2. Tool creation limit is per-run, not per-session — batch builds are
-   preferable to spread builds across runs.
-3. 18 frontiers built across this conversation — covering web automation,
-   data science, finance, geology, astronomy, oceanography, education,
-   language, consumer products, and more.
+1. When tool creation is blocked, cross-domain composition of existing tools
+   IS a valid frontier. The coastal intelligence report combined marine, solar,
+   and geolocation data in a way no single tool does.
+2. The Southern Hemisphere winter contrast is stark: same 10h photoperiod
+   at 33.9°S, but Sydney's sea is 19.3°C (East Australian Current) while
+   Cape Town's is 13.0°C (Benguela upwelling) — a 6.3°C difference at
+   the same latitude. Ocean currents dominate over solar forcing.
+3. Lisbon in summer has nearly 15h of daylight but wave heights under 0.4m —
+   the Iberian Peninsula blocks Atlantic swell while the latitude grants
+   extended daylight. Perfect small-craft conditions.
