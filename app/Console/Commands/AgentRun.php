@@ -43,6 +43,7 @@ class AgentRun extends Command
                 $config['providers'],
                 $config['provider_order'],
                 fn (string $message) => $this->warn($message),
+                $config['llm_retry'],
             ),
             prompts: new PromptRepository($config['prompts_path']),
             registry: $registry,
@@ -54,6 +55,8 @@ class AgentRun extends Command
                 'max_prompt_switches_per_run' => $config['max_prompt_switches_per_run'],
                 'max_tools_created_per_run' => $config['max_tools_created_per_run'],
                 'autonomous_continue_message' => $config['autonomous_continue_message'],
+                'history_compress_chars' => $config['history_compress_chars'],
+                'max_tool_result_chars' => $config['max_tool_result_chars'],
             ],
             approve: fn (string $question) => $this->confirm($question),
             output: function (string $type, string $message) {

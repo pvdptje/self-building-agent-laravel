@@ -18,7 +18,7 @@ class AgentRunner
 
     /**
      * @param array{allow_self_modify_system_prompt: bool, require_human_approval_for_prompt_switch: bool, allow_make_tool: bool, require_human_approval_for_new_tools: bool} $modeConfig
-     * @param array{max_prompt_switches_per_run: int, max_tools_created_per_run: int, autonomous_continue_message?: string} $limits
+     * @param array{max_prompt_switches_per_run: int, max_tools_created_per_run: int, autonomous_continue_message?: string, history_compress_chars?: int, max_tool_result_chars?: int} $limits
      * @param Closure(string): bool $approve Ask the human a yes/no question.
      * @param Closure(string, string): void $output Report progress to the human as (type, message). Types: iteration, thought, tool_call, tool_result, proposal, switch, system.
      */
@@ -73,6 +73,8 @@ class AgentRunner
                 $this->pendingPrompt = null;
             }
 
+            $this->compressHistoryIfNeeded($messages, $task);
+
             // Reload generated tools from disk so tools made last iteration appear.
             $this->registry->refreshGenerated();
 
@@ -120,6 +122,15 @@ class AgentRunner
                 $result = $this->dispatch($name, $arguments);
                 $resultJson = is_string($result) ? $result : json_encode($result, JSON_UNESCAPED_SLASHES);
 
+                // Cap what goes into the model's history, so one giant tool
+                // result cannot blow the context window in a single call.
+                $maxChars = $this->limits['max_tool_result_chars'] ?? 8000;
+
+                if ($maxChars > 0 && mb_strlen($resultJson) > $maxChars) {
+                    $fullLength = mb_strlen($resultJson);
+                    $resultJson = mb_substr($resultJson, 0, $maxChars)."…[truncated by host; the full result was {$fullLength} characters]";
+                }
+
                 ($this->output)('tool_result', mb_strlen($resultJson) > 400 ? mb_substr($resultJson, 0, 400).'…' : $resultJson);
 
                 $messages[] = [
@@ -131,6 +142,61 @@ class AgentRunner
         }
 
         return $finalAnswer;
+    }
+
+    /**
+     * When the conversation history nears the model's context limit, ask the
+     * model to write a memory summary of the session, then replace the old
+     * messages with it. The agent experiences this as consolidated memory;
+     * without it, a long run dies of context overflow.
+     *
+     * @param array<int, array<string, mixed>> $messages
+     */
+    private function compressHistoryIfNeeded(array &$messages, string $task): void
+    {
+        $threshold = $this->limits['history_compress_chars'] ?? 150_000;
+
+        if ($threshold <= 0) {
+            return;
+        }
+
+        $size = strlen(json_encode($messages, JSON_UNESCAPED_SLASHES) ?: '');
+
+        if ($size <= $threshold) {
+            return;
+        }
+
+        ($this->output)('system', "History is ~{$size} chars (threshold {$threshold}); compressing it into a memory summary.");
+
+        $request = $messages;
+        $request[] = [
+            'role' => 'user',
+            'content' => 'HOST NOTICE: This conversation is close to the model context limit, so the host is about to compress your history. '
+                .'Write a thorough memory summary of this session, addressed to your future self. Include: the original task and your current goals; '
+                .'every tool you created or changed (name and purpose); key discoveries and unresolved bugs; which workspace or journal files you rely on; '
+                .'and exactly what you planned to do next. Reply with only the summary text.',
+        ];
+
+        $summary = trim((string) ($this->llm->chat($request, [])['content'] ?? ''));
+
+        if ($summary === '') {
+            ($this->output)('system', 'Compression produced an empty summary; keeping the full history for now.');
+
+            return;
+        }
+
+        $messages = [
+            $messages[0],
+            [
+                'role' => 'user',
+                'content' => "Original task: {$task}\n\n"
+                    ."[Host] Your earlier conversation history was compressed to keep this long run alive. "
+                    ."Here is the memory summary you wrote:\n\n{$summary}\n\n"
+                    .'Continue from where you left off.',
+            ],
+        ];
+
+        ($this->output)('system', 'History compressed; continuing with consolidated memory.');
     }
 
     /**

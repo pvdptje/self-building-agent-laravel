@@ -16,20 +16,38 @@ return [
 
     // The prompt the agent boots with.
     'default_prompt' => 'creative_experiment',
-    'autonomous_prompt' => 'autonomous_universe',
+    'autonomous_prompt' => 'environment_builder',
 
     // Used when agent:run is started with --forever and no task argument.
     'autonomous_seed_task' => 'Begin an open-ended experiment. Build a small universe of useful, strange, and composable PHP tools. Decide your own next steps.',
     'autonomous_continue_message' => 'Continue the open-ended experiment. Decide your next useful or surprising step. You may inspect prompts, create a small tool, use an existing tool, combine discoveries, or report a short journal note before continuing.',
 
     // Safety fuses.
-    'max_prompt_switches_per_run' => 3,
-    'max_tools_created_per_run' => 10,
+    'max_prompt_switches_per_run' => 10,
+    'max_tools_created_per_run' => 25,
 
     // Generated tools run in an isolated child PHP process with these limits,
     // so a runaway tool errors out instead of killing the agent loop.
     'tool_memory_limit' => '64M',
     'tool_timeout_seconds' => 10,
+
+    // Long-run survival. When the JSON-encoded history exceeds this many
+    // characters (~4 chars per token; 150k chars is roughly 37k tokens, safely
+    // inside a 64k-token window), the host asks the model to summarize the
+    // session and replaces the old messages with the summary. Tool results
+    // are capped so one giant output cannot blow the context in a single call.
+    'history_compress_chars' => 150_000,
+    'max_tool_result_chars' => 8_000,
+
+    // Transient LLM failures (5xx, 429, network) are retried with backoff.
+    // When every provider fails, wait and sweep them all again, up to
+    // 'rounds' times, before giving up on the run.
+    'llm_retry' => [
+        'attempts_per_provider' => 3,
+        'backoff_seconds' => [5, 15, 45],
+        'rounds' => 5,
+        'round_backoff_seconds' => 120,
+    ],
 
     // LLM providers, tried in order. A provider with a missing key is skipped,
     // and a provider that errors is abandoned for the rest of the run.

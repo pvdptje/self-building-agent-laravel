@@ -26,7 +26,7 @@ function fakeAssistantText(string $text): array
     return ['choices' => [['message' => ['role' => 'assistant', 'content' => $text]]]];
 }
 
-function makeRunner(string $mode, array $modeConfig, bool $approve, string $workDir): AgentRunner
+function makeRunner(string $mode, array $modeConfig, bool $approve, string $workDir, array $extraLimits = []): AgentRunner
 {
     $promptsDir = $workDir.'/prompts';
     $toolsDir = $workDir.'/tools';
@@ -49,7 +49,7 @@ function makeRunner(string $mode, array $modeConfig, bool $approve, string $work
         logger: new AgentLogger($workDir.'/logs'),
         mode: $mode,
         modeConfig: $modeConfig,
-        limits: ['max_prompt_switches_per_run' => 3, 'max_tools_created_per_run' => 10],
+        limits: array_merge(['max_prompt_switches_per_run' => 3, 'max_tools_created_per_run' => 10], $extraLimits),
         approve: fn (string $question) => $approve,
         output: fn (string $type, string $message) => null,
     );
@@ -228,6 +228,65 @@ it('stops switching prompts after the fuse limit is reached', function () {
 
     expect($lineage)->toHaveCount(4)
         ->and($approved)->toHaveCount(3);
+});
+
+it('compresses the history into a memory summary when it exceeds the threshold', function () {
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(fakeAssistantText('MEMORY: built 3 tools, was about to test the oracle.'))
+        ->push(fakeAssistantText('done')),
+    ]);
+
+    $runner = makeRunner('sane', [
+        'allow_self_modify_system_prompt' => false,
+        'require_human_approval_for_prompt_switch' => true,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => true,
+    ], approve: false, workDir: $this->workDir, extraLimits: ['history_compress_chars' => 10]);
+
+    $answer = $runner->run('Build a universe.', 'creative_experiment', 5);
+
+    expect($answer)->toBe('done');
+
+    $requests = Http::recorded();
+
+    // First request asks the model to summarize; second continues with a
+    // compact history containing the summary instead of the old messages.
+    $firstMessages = $requests[0][0]->data()['messages'];
+    $secondMessages = $requests[1][0]->data()['messages'];
+
+    expect(end($firstMessages)['content'])->toContain('HOST NOTICE')
+        ->and($secondMessages)->toHaveCount(2)
+        ->and($secondMessages[0]['role'])->toBe('system')
+        ->and($secondMessages[1]['content'])->toContain('Original task: Build a universe.')
+        ->and($secondMessages[1]['content'])->toContain('MEMORY: built 3 tools')
+        ->and(json_encode($secondMessages))->not->toContain('HOST NOTICE');
+});
+
+it('truncates oversized tool results before they enter the history', function () {
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(fakeAssistantToolCall('read_prompt_resource', ['id' => 'toolmaker']))
+        ->push(fakeAssistantText('done')),
+    ]);
+
+    $runner = makeRunner('sane', [
+        'allow_self_modify_system_prompt' => false,
+        'require_human_approval_for_prompt_switch' => true,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => true,
+    ], approve: false, workDir: $this->workDir, extraLimits: ['max_tool_result_chars' => 40]);
+
+    $runner->run('Read the toolmaker prompt.', 'creative_experiment', 5);
+
+    Http::assertSent(function ($request) {
+        foreach ($request->data()['messages'] ?? [] as $message) {
+            if (($message['role'] ?? '') === 'tool') {
+                return str_contains($message['content'], 'truncated by host')
+                    && mb_strlen($message['content']) < 150;
+            }
+        }
+
+        return false;
+    });
 });
 
 it('reports lists and reads of prompt resources back to the model', function () {
