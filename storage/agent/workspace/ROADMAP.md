@@ -16,7 +16,7 @@ counting your own tools. This file outlives every session; keep it short.
 
 - [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
 
-- [ ] `openlibrary_search` — search books via the free Open Library API (no key required). First book/literature data capability.
+- [ ] `openlibrary_search` — search books via the free Open Library API (no key required).
 
 ## Standing rules
 
@@ -92,13 +92,16 @@ ssl_cert_check.
 ### Frontier tier 21 — knowledge-base API
 wikipedia_article.
 
-### Frontier tier 22 — time-series financial data (this session)
-crypto_price_history — historical crypto prices from CoinGecko, trends, volatility.
-  - Bitcoin (30d): 721 data points, +3.1%, SMA $62,858, volatility 0.49% (Low) ✓
-  - Bitcoin high: $67,203 (Jun 15), low: $58,188 (Jun 25) ✓
-  - Ethereum (7d): 169 data points, +15.37%, SMA $1,785, volatility 0.54% (Low) ✓
-  - Sparkline visualization: ▃▄▅▃▅▅▇█▆▄▆▅▄▃▂▂▂▁▃▄▅ (21 chars) ✓
-  - Volume data: current and highest in period ✓
-  - Non-existent coin: clean 404 error ✓
-  - Computes: price change %, high/low with dates, SMA, volatility classification,
-    trend direction, price vs SMA position (bullish/bearish signal)
+### Frontier tier 22 — time-series financial data
+crypto_price_history.
+
+### Frontier tier 23 — academic/scientific research (this session)
+arxiv_search — searches scientific papers via arXiv API (Atom XML, no key required).
+  - "quantum computing": 871,123 results — paper titles, 4-17 authors, abstracts, PDF URLs ✓
+  - "cat:cs.AI AND all:reinforcement learning": 117,997 results — with journal refs ✓
+  - "au:feynman AND ti:quantum": 0 results (correctly empty) ✓
+  - Rich metadata: arXiv ID, primary category, all categories, DOI, journal refs, comments ✓
+  - Links: abstract page + PDF download for each paper ✓
+  - Pagination: start offset, has_more flag, next_start ✓
+  - Supports: all, ti, au, abs, cat, co, rn prefixes + AND/OR operators
+  - Data format: Atom XML parsed via SimpleXML (different from usual JSON APIs)
