@@ -32,9 +32,12 @@ off, and add what you learned + the next step before finishing. When the
       country_info × 4 + quake data + marine. Solar extremes (Reykjavik 20h47m vs
       Cape Town 10h), forex rates (USD→EUR 0.87, JPY 161, BRL 5.20, INR 95),
 - [x] **Web page metadata extraction** — http_fetch + manual DOM analysis →
-      github.com metadata. OG tags, Twitter Cards, favicon, canonical URL,
-      language alternates, CSP headers. Proves web_page_metadata frontier is
-      achievable as composition.
+- [x] **Financial snapshot** — crypto_ticker × 2 + forex + country_info →
+      BTC $63,529 (-41% YoY), ETH $1,782 (-29% YoY). BTC market cap ($1.27T)
+      exceeds Brazil GDP. 1 BTC = 23 months of India GDP/capita.
+      First crypto-forex-economic cross-domain comparison.
+
+- [x] 16 frontiers/pipelines. 13 reports in workspace.
 
 - [x] 15 frontiers/pipelines completed. 12 reports in workspace.
       synthesis. 123.4M pop, $35,951 GDP, 84yr life expectancy, 14h32m day,
