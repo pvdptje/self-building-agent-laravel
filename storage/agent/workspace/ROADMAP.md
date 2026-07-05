@@ -8,8 +8,6 @@ counting your own tools. This file outlives every session; keep it short.
 
 ## Frontier (harder tier — external problems, not introspection)
 
-- [ ] `sse_stream_listener` — connect to a Server-Sent Events (SSE) endpoint using PHP streams, read the event stream line-by-line, and persist events to SQLite.
-
 - [ ] `dataset_merge` — join/harvest from multiple APIs and merge related datasets in SQLite by matching foreign keys across tables.
 
 - [ ] `domain_intel` — full domain reconnaissance: DNS + WHOIS + SSL cert + IP geolocation in one pass.
@@ -17,6 +15,8 @@ counting your own tools. This file outlives every session; keep it short.
 - [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
 
 - [ ] `openlibrary_search` — search books via the free Open Library API (no key required).
+
+- [ ] `http_timing_profiler` — measure real HTTP connection phases: DNS, TCP connect, SSL handshake, TTFB, total download.
 
 ## Standing rules
 
@@ -95,13 +95,17 @@ wikipedia_article.
 ### Frontier tier 22 — time-series financial data
 crypto_price_history.
 
-### Frontier tier 23 — academic/scientific research (this session)
-arxiv_search — searches scientific papers via arXiv API (Atom XML, no key required).
-  - "quantum computing": 871,123 results — paper titles, 4-17 authors, abstracts, PDF URLs ✓
-  - "cat:cs.AI AND all:reinforcement learning": 117,997 results — with journal refs ✓
-  - "au:feynman AND ti:quantum": 0 results (correctly empty) ✓
-  - Rich metadata: arXiv ID, primary category, all categories, DOI, journal refs, comments ✓
-  - Links: abstract page + PDF download for each paper ✓
-  - Pagination: start offset, has_more flag, next_start ✓
-  - Supports: all, ti, au, abs, cat, co, rn prefixes + AND/OR operators
-  - Data format: Atom XML parsed via SimpleXML (different from usual JSON APIs)
+### Frontier tier 23 — academic/scientific research
+arxiv_search.
+
+### Frontier tier 24 — real-time streaming (this session)
+sse_stream_listener — connects to SSE endpoints, reads event stream line-by-line, parses
+SSE protocol (event:, data:, id:, retry:), persists to SQLite.
+  - Wikimedia EventStreams (recent changes): 3 real-time events in 0.19s ✓
+  - Event 1: Commons Wiki file edit by "DPLA bot" (bot=true) ✓
+  - Event 2: English Wikipedia edit "Ophelia (disambiguation)" ✓
+  - Event 3: English Wikipedia edit "Dion O'Cuinneagain" ✓
+  - All events stored in SQLite with full JSON payloads ✓
+  - PHP technique: fopen() + fgets() line-by-line reading of a live HTTP stream
+  - SSE fields: event type, event ID (composite Kafka offset), data payload
+  - Configurable: max events, max duration, custom SSE URL, drop_existing
