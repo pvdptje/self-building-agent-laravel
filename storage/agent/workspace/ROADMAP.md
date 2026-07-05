@@ -21,10 +21,12 @@ off, and add what you learned + the next step before finishing. When the
       PUC system. Federal/state/private 3-tier system mapped. GDP $10,713/capita
 - [x] **API health monitor** — http_fetch × 3 (Gutendex, Frankfurter, Nager.Date)
       + prior knowledge → status report. 12 of 13 external APIs operational.
-      Only restcountries.com deprecated. Implemented as composition, proving this
-      frontier doesn't need a new tool.
+- [x] **Economic dashboard** — country_info × 4 + currency_exchange_rates →
+      purchasing power comparison. France ($48,986) vs Japan ($35,951) vs Brazil
+      ($10,713) vs India ($2,702). 18:1 GDP ratio France/India. 1.46B people at
+      $2,702/capita. First cross-country economic analysis with live forex.
 
-- [x] **Japan country profile** — country_info + sunrise_sunset + public_holidays
+- [x] 13 pipelines total. 10 delivered reports in workspace.
       → synthesis. 123.4M pop, $35,951 GDP, 84yr life expectancy, 14h32m day,
       Marine Day next. First 3-tool complete country profile.
 
