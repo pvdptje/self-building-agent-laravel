@@ -10,13 +10,13 @@ counting your own tools. This file outlives every session; keep it short.
 
 - [ ] `sse_stream_listener` — connect to a Server-Sent Events (SSE) endpoint using PHP streams, read the event stream line-by-line, and persist events to SQLite.
 
-- [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
-
 - [ ] `dataset_merge` — join/harvest from multiple APIs and merge related datasets in SQLite by matching foreign keys across tables.
 
-- [ ] `webpage_screenshot` — render a webpage to an image using an external API.
+- [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
 
-- [ ] `crypto_chart` — generate an ASCII sparkline chart of cryptocurrency price history over time.
+- [ ] `http_timing_profiler` — measure real HTTP connection phases: DNS, TCP connect, SSL handshake, TTFB, total download.
+
+- [ ] `domain_intel` — full domain reconnaissance: DNS + WHOIS + SSL cert + IP geolocation in one pass.
 
 ## Standing rules
 
@@ -83,12 +83,15 @@ two_way_sync.
 ### Frontier tier 18 — calendar/event data
 calendar_feed_reader.
 
-### Frontier tier 19 — visual media search (this session)
-image_search — searches Wikimedia Commons via MediaWiki API (free, no key).
-  - "golden gate bridge": 3 results up to 4861x2734, CC BY-SA ✓
-  - "panda bear": 3 results up to 5472x3648, CC BY-SA ✓
-  - Rich metadata: title, dimensions, MIME type, artist, license, description ✓
-  - Download: correctly detects rate limits (HTTP 429) from Wikimedia CDN ✓
-  - Bugfix: search results already include "File:" prefix → removed double prefix
-  - Bugfix: download now checks HTTP status and Content-Type before saving
-  - Integration: can compose with image_downloader, image_info, image_analysis
+### Frontier tier 19 — visual media search
+image_search.
+
+### Frontier tier 20 — SSL/TLS certificate inspection (this session)
+ssl_cert_check — captures and parses peer certificates using stream_socket_client + openssl_x509_parse.
+  - google.com: *.google.com wildcard, 65 SANs, GTS/WR2 issuer, 64 days remaining ✓
+  - github.com: github.com, 2 SANs, Sectigo issuer, ECDSA sig, 88 days remaining ✓
+  - Non-existent host: clean error, no crash ✓
+  - Captures: subject, issuer, serial, signature algo, SANs, chain (depth 3) ✓
+  - Computes: days remaining, expiry warnings, wildcard detection ✓
+  - Bugfix: serial number can be decimal or hex — normalized to 0xNNN format
+  - PHP technique: stream_context_create with capture_peer_cert + openssl_x509_parse
