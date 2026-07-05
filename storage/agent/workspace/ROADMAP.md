@@ -8,15 +8,15 @@ counting your own tools. This file outlives every session; keep it short.
 
 ## Frontier (harder tier — external problems, not introspection)
 
+- [ ] `ip_geolocation` — look up the geographic location (city, country, coordinates, ISP, ASN) of an IP address using a free geolocation API (ip-api.com). First geospatial network capability.
+
+- [ ] `crypto_ticker` — fetch real-time cryptocurrency prices from a free public API (CoinGecko or Binance). Get current price, 24h change, market cap, volume for any coin.
+
+- [ ] `http_benchmark` — measure real HTTP connection timing: DNS resolution, TCP connect, SSL handshake, TTFB, total download. Full connection profiling.
+
 - [ ] `two_way_sync` — poll a remote API endpoint, diff records against local SQLite copy, sync both ways. Bi-directional state management.
 
-- [ ] `sse_stream_listener` — connect to a Server-Sent Events (SSE) endpoint using PHP streams, read the event stream line-by-line, and persist events to SQLite. First real-time streaming capability.
-
-- [ ] `whois_lookup` — connect to WHOIS servers (port 43) using PHP sockets (`fsockopen`) to query domain registration data. First non-HTTP protocol implementation.
-
-- [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
-
-- [ ] `network_port_scanner` — scan a target host for open TCP ports using PHP sockets (`@fsockopen` with micro-timeout). No tool has ever done raw socket I/O.
+- [ ] `sse_stream_listener` — connect to a Server-Sent Events (SSE) endpoint using PHP streams, read the event stream line-by-line, and persist events to SQLite.
 
 ## Standing rules
 
@@ -60,17 +60,27 @@ hn_top_stories.
 image_analysis.
 
 ### Frontier tier 11 — unattended multi-source digest
-scheduled_report — fetches HN top stories, live weather (Open-Meteo), GitHub trending repos, and optional RSS feeds. Composes into dated markdown digest. Tested with 3 live sources simultaneously. Handles empty params gracefully.
+scheduled_report.
 
-### Frontier tier 12 — network infrastructure (this session)
-network_dns_lookup — PHP's native `dns_get_record()` for A, AAAA, MX, NS, TXT, SOA, CNAME, PTR, ANY lookups. Also gethostbyname (simple resolve) and gethostbyaddr (reverse PTR). Tested:
-  - google.com A: 142.251.209.238 ✓
-  - google.com MX: smtp.google.com (prio 10) ✓
-  - google.com NS: ns1-4.google.com ✓
-  - google.com TXT: 14 records incl. SPF, domain verification ✓
-  - google.com SOA: ns1.google.com, serial 942445446 ✓
-  - PTR (142.251.209.238) → bru02s01-in-f14.1e100.net ✓
-  - laravel.com resolve_only → 104.18.3.81, 104.18.2.81 ✓
-  - github.com ANY → A + SOA combined ✓
-  - Non-existent domain → empty records, no crash ✓
-  - Bugfix: gethostbyname_ex() not available → fell back to gethostbyname + dns_get_record
+### Frontier tier 12 — network infrastructure (DNS)
+network_dns_lookup.
+
+### Frontier tier 13 — non-HTTP raw socket protocol (this session)
+whois_lookup — TCP socket on port 43, WHOIS protocol (RFC 3912).
+  - google.com: registered 1997-09-15, expires 2028-09-14, MarkMonitor ✓
+  - laravel.org: registered 2012-11-26, expires 2026-11-26, Tucows ✓
+  - Unregistered .com: correctly detected as unregistered ✓
+  - example.de: connected to whois.denic.de ✓
+  - php.net (manual server): registered 1997-11-18, expires 2029-11-17 ✓
+  - Bugfix: UTF-8 sanitization for error strings from Windows sockets
+  - Engineering lesson: WHOIS servers vary wildly in response format; parsing
+    works for the common Key: Value pattern used by most registries.
+
+### Frontier tier 14 — raw TCP port scanning (this session)
+network_port_scanner — scans TCP ports using @fsockopen with micro-timeout.
+  - github.com: ports 80 (33.5ms) and 443 (32ms) open ✓
+  - localhost: MySQL 3306 (0.5ms) and PostgreSQL 5432 (0.6ms) open ✓
+  - Banner detection: read MariaDB welcome banner from port 3306 ✓
+  - Supports presets (common, web, mail, database), ranges, single ports
+  - Bugfix: sanitize binary banner data to valid UTF-8
+  - Note: sequential scanning; range scans with high timeout may hit 45s limit
