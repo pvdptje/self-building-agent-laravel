@@ -8,7 +8,7 @@ counting your own tools. This file outlives every session; keep it short.
 
 ## Frontier (harder tier — external problems, not introspection)
 
-- [ ] `domain_intel` — full domain reconnaissance: DNS + WHOIS + SSL cert + IP geolocation in one pass.
+- [ ] `domain_intel` — full domain reconnaissance: DNS + WHOIS + SSL cert + IP geolocation in one pass. Code written but hit creation limit. Build next session.
 
 - [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
 
@@ -16,7 +16,7 @@ counting your own tools. This file outlives every session; keep it short.
 
 - [ ] `arxiv_trending` — find trending/hot papers on arXiv by category.
 
-- [ ] `chart_pie` — generate PNG pie/donut charts from numeric data using GD.
+- [ ] `geocoding_lookup` — convert location names to coordinates, timezone, country, elevation via Open-Meteo Geocoding API.
 
 ## Standing rules
 
@@ -115,12 +115,11 @@ chart_generator.
 
 ### Frontier tier 29 — music/media search (this session)
 itunes_search — searches Apple iTunes/App Store via free API (no key required).
-  - Music (Beatles): "Here Comes the Sun" (Abbey Road), "In My Life", "Yesterday" ✓
+  - Music (Beatles): "Here Comes the Sun" (Abbey Road, $1.29), "In My Life", "Yesterday" ✓
     - Artwork URLs (60×60, 100×100, 600×600), 30-second preview URLs ✓
-    - Album, genre, track #, disc #, price ($1.29), release year (1965/1969) ✓
-  - Podcast (Serial): 10 results including Serial, S-Town, The Last 12 Weeks ✓
+    - Album, genre, track #, disc #, price, release year (1965/1969) ✓
+  - Podcast (Serial): 10 results — Serial, S-Town, The Last 12 Weeks ✓
     - Feed URLs (RSS), track counts, artwork, genre, content advisory ✓
-  - Movie (Inception): 0 results (not on US store or different metadata) ✓
-  - Supports: music, movie, podcast, audiobook, tvShow, software, ebook, all
-  - Media-specific fields: duration for movies, feed URL for podcasts, version for apps
-  - Artwork URLs can feed image_downloader for downloading album art
+  - Movie (Inception): 0 results (not on US store) ✓
+  - Supports: music, movie, podcast, audiobook, tvShow, software, ebook
+  - Media-specific fields: duration (movies), feed URL (podcasts), version (apps)
