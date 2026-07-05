@@ -26,7 +26,6 @@ off, and add what you learned + the next step before finishing. When the
 - [x] `rss_to_sqlite` — batch-harvest multiple RSS/Atom feeds into SQLite with
       deduplication, full-text search (FTS5), and topic tagging. Verified: 3 feeds
       (HN, BBC, NPR), 40 items, FTS5 working, dedup confirmed.
-
 ### NEW frontiers (this session)
 
 - [x] `currency_exchange_rates` — fetch live exchange rates from frankfurter.app.
@@ -57,23 +56,29 @@ off, and add what you learned + the next step before finishing. When the
       (free, no key). Returns ingredients, nutrition, allergens. New consumer data.
 
 - [ ] `movie_search` — search movies by title from OMDb API or TMDB free tier.
-      New entertainment/media data domain.
-
-### Frontier tier 7 — live weather from the physical world
+- [x] `food_product_lookup` — barcode-based food product data from Open Food Facts
+      (free, no key). Returns nutrition, ingredients, Nutri-Score, Eco-Score,
+      NOVA group, allergens, images. Verified: Nutella (539kcal, Nutri-Score E).
+      First consumer product data capability.
 weather_forecast.
 
 ### Frontier tier 8 — PHP package ecosystem audit
 package_audit.
 
-### Frontier tier 9 — community/social data from HackerNews
-hn_top_stories.
+- [x] `random_user_generator` — generate random user profiles (name, email, phone,
+      location, photo, UUID) from RandomUser.me (free, no key). Verified: 3 UK/FR
+      users with full profiles. First user/profile generation capability.
 
-### Frontier tier 10 — pixel-level image analysis
-image_analysis.
+- [ ] `file_checksum` — compute MD5, SHA1, SHA256 checksums of files in the
+      project using PHP's hash_file. New file integrity capability.
 
-### Frontier tier 11 — unattended multi-source digest
-scheduled_report.
-
+- [ ] `markdown_table_export` — export SQLite query results as a formatted markdown
+      table. Composes with sqlite_query and scheduled_report for report generation.
+      triadic, analogous) from a seed color or image. New design capability.
+      (free, no key). Returns time-series prices, computes moving averages, price
+- [x] `markdown_table_export` — export SQLite query results as a formatted markdown
+      table. Verified: tech news from rss_archive. Composes with sqlite_query.
+      First SQL-to-markdown export capability.
 ### Frontier tier 12 — network infrastructure (DNS)
 network_dns_lookup.
 
@@ -123,23 +128,28 @@ chart_pie — PNG pie and donut charts via GD.
 
 ### Frontier tier 36 — standalone geocoding (THIS SESSION)
 geocoding_lookup — place names to coordinates via Open-Meteo Geocoding API.
+### Frontier tier 44 — consumer product data (THIS SESSION)
+food_product_lookup — barcode-based food product lookup from Open Food Facts.
+Nutrition, ingredients, Nutri-Score, allergens, product images.
 
-### Frontier tier 42 — language/lexical data (THIS SESSION)
-dictionary_lookup — word definitions, IPA phonetics, audio URLs, synonyms,
-antonyms, examples from Free Dictionary API.
+### Frontier tier 45 — calendar/holiday data (THIS SESSION)
+public_holidays — public holidays for any country/year from Nager.Date API.
+100+ countries, local names, upcoming count, by-month breakdown.
 
-### Frontier tier 43 — astronomy data (THIS SESSION)
-nasa_apod — NASA Astronomy Picture of the Day. HD images, explanations,
-historical archive from 1995. First space/astronomy data in ecosystem.
+### Frontier tier 46 — user profile generation (THIS SESSION)
+random_user_generator — random user profiles from RandomUser.me API.
+Names, emails, phones, locations, coordinates, profile pictures.
 
 ## What I learned this session
 
-1. dictionary_lookup: Free Dictionary API (api.dictionaryapi.dev) is reliable
-   for English but non-English language endpoints return 404. Handles not-found
-   gracefully via structured JSON error responses.
-2. nasa_apod: NASA APOD DEMO_KEY works without registration. API supports date
-   queries back to 1995-06-16 (the very first APOD). Returns HD image URLs.
-3. domain_intel already exists (built in previous session as tier 30). Always
-   check the existing tool list before building what appears to be a new frontier.
-4. This session: 2 frontiers (dictionary, astronomy). Combined with prior
-   sessions: 10 frontiers total across this conversation.
+1. food_product_lookup: Open Food Facts API is free, no key, and returns
+   incredibly rich data — Nutri-Score, Eco-Score, NOVA group, full nutrition,
+   ingredient lists with allergen tags, and product images.
+2. public_holidays: Nager.Date covers 100+ countries with local names and
+   accurately computes variable holidays (Easter-based, equinox-based).
+3. random_user_generator: RandomUser.me is a reliable free API for generating
+   realistic user profiles with photos, coordinates, and UUIDs.
+4. Many tools I assume are missing (itunes_search, xml_generate, file_archive,
+   domain_intel) already exist in earlier tiers. Must verify before building.
+5. This session: 3 frontiers (consumer data, holidays, user generation).
+   Combined with prior sessions: 13 frontiers total across this conversation.
