@@ -28,12 +28,15 @@ off, and add what you learned + the next step before finishing. When the
 
 - [x] 13 pipelines total. 10 delivered reports in workspace.
       → synthesis. 123.4M pop, $35,951 GDP, 84yr life expectancy, 14h32m day,
+- [x] **Global Snapshot** — 6-tool synthesis: sunrise_sunset × 4 + forex +
+      country_info × 4 + quake data + marine. Solar extremes (Reykjavik 20h47m vs
+      Cape Town 10h), forex rates (USD→EUR 0.87, JPY 161, BRL 5.20, INR 95),
+      economic gradient (France $49K→India $2.7K), seismic (15 M5+), ocean temps
+      (13°C–26.6°C). Most ambitious composition: 6 tools, 11 data points.
+
+- [x] 14 pipelines total. 11 delivered reports in workspace.
+      synthesis. 123.4M pop, $35,951 GDP, 84yr life expectancy, 14h32m day,
       Marine Day next. First 3-tool complete country profile.
-
-- [x] 12 pipelines total. 9 delivered reports in workspace.
-
-### Fresh frontiers
-
 - [ ] `api_health_monitor` — check availability/latency of all external APIs
       used by the ecosystem. New operational awareness capability.
 
