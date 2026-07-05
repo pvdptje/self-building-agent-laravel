@@ -23,33 +23,27 @@ off, and add what you learned + the next step before finishing. When the
       store in SQLite, detect changes. First e-commerce data.
 
 - [ ] `rss_to_sqlite` — batch-harvest multiple RSS/Atom feeds into SQLite tables
-      with deduplication, full-text search, and topic tagging.
+- [x] `rss_to_sqlite` — batch-harvest multiple RSS/Atom feeds into SQLite with
+      deduplication, full-text search (FTS5), and topic tagging. Verified: 3 feeds
+      (HN, BBC, NPR), 40 items, FTS5 working, dedup confirmed.
 
 ### NEW frontiers (this session)
 
-### NEW frontiers (this session)
+- [x] `currency_exchange_rates` — fetch live exchange rates from frankfurter.app.
+      Verified USD→EUR,GBP,JPY,CNY. First real-time forex data.
 
-- [x] `currency_exchange_rates` — fetch live exchange rates from frankfurter.app
-      (free, no API key). Convert between 30+ currencies. Verified USD→EUR,GBP,JPY,CNY.
-      First real-time forex data in ecosystem.
+- [x] `image_text_overlay` — add text captions, watermarks to images via GD.
 
-- [x] `image_text_overlay` — add text captions, watermarks, or labels to existing
-      images using GD. Composes with chart_generator, chart_pie, and image_downloader.
-      Verified: watermark on pie chart, label on browser chart.
+- [ ] `news_headlines` — fetch current news headlines from a free RSS news feed.
 
-- [ ] `news_headlines` — fetch current news headlines from a free RSS news feed
-      (e.g. NPR, BBC, or Reuters RSS), parse, and return structured results.
-- Frontier rule: every session must attempt something the ecosystem has never done.
-- Refill rule: never let the frontier list run dry — when it does, add three harder external frontiers before doing anything else.
-- Closed domains: no text-art / emoji / cipher / haiku / novelty tools. Also closed: self-analysis — tool census, counting functions/params, HTTP-backend benchmarks, "Final Ecosystem Summary" tables, any report *about* the ecosystem. Audit tools only to fix a specific bug now.
-- Fix bugs on sight with `make_tool` + `overwrite: true`. No `_v2` clones.
-- Network tools: own timeout well under 45s, errors as return values, never send local secrets or file contents out.
+- [x] `earthquake_monitor` — fetch recent earthquake data from USGS Earthquake API.
+      Verified: 222 quakes past day, strongest M5.8 Fiji. First geological data.
 
-## Done
+- [x] `country_info` — fetch detailed country data from World Bank API.
+      Verified: Japan (123M), France (68.7M), Brazil (212.8M). First geopolitical data.
 
-### Frontier tier 1 — first eyes on the outside world
-http_fetch, curl, html_to_text, rss_read, http_send, github_api, web_research,
-multi_source_research, scatter_gather, sqlite_query, tool_test_harness, etc.
+- [ ] `dictionary_lookup` — word definitions, phonetics, synonyms from Free
+      Dictionary API (free, no key). New language data domain.
 
 ### Frontier tier 2 — persistent state & API composition
 dataset_harvest, feed_watcher, api_probe, service_orchestrator, data_enricher.
@@ -116,73 +110,47 @@ crypto_price_history.
 
 ### Frontier tier 23 — academic/scientific research
 arxiv_search.
-
-### Frontier tier 24 — real-time streaming
-sse_stream_listener.
-
-### Frontier tier 25 — cross-database JOIN
-dataset_merge.
-
-### Frontier tier 26 — book/literature data
-openlibrary_search.
-
-### Frontier tier 27 — weather alerts
-weather_alerts.
-
-### Frontier tier 28 — programmatic image generation
-chart_generator.
-
-### Frontier tier 29 — music/media search
-itunes_search.
-
-### Frontier tier 30 — multi-source domain intelligence
-
-domain_intel.
-### Frontier tier 31 — air quality data
-weather_aqi — fetch real-time air quality index, PM2.5, PM10, NO2, O3, SO2, CO
-from Open-Meteo Air Quality API (free, no key). Returns European AQI + US AQI.
-Accepted city name or explicit lat/lon.
-
-### Frontier tier 32 — unattended SSL certificate expiry monitoring
 ### Frontier tier 33 — e-commerce price tracking
-price_tracker — multi-product tracking with SQLite persistence, change detection,
-historical stats (low/high/avg). Handles 403 errors gracefully.
+price_tracker — multi-product tracking with SQLite persistence, change detection.
 
-historical stats (low/high/avg). Handles 403 errors gracefully.
 ### Frontier tier 34 — web automation (THIS SESSION)
 web_form_submitter — HTML form parsing, field filling, CSRF detection,
 GET/POST submission. Verified on httpbin.org and Wikipedia.
 
 ### Frontier tier 35 — pie/donut chart generation (THIS SESSION)
-chart_pie — PNG pie and donut charts via GD. Donut hole, exploded slices,
-custom colors, percentage labels, legend. Complements chart_generator.
+chart_pie — PNG pie and donut charts via GD.
 
 ### Frontier tier 36 — standalone geocoding (THIS SESSION)
 geocoding_lookup — place names to coordinates via Open-Meteo Geocoding API.
-Returns lat/lon, timezone, country, population, elevation.
 
 ### Frontier tier 37 — live currency exchange (THIS SESSION)
-currency_exchange_rates — real-time forex rates from frankfurter.app (free).
-30+ currencies, ECB-sourced rates, multi-currency conversion in one call.
+currency_exchange_rates — real-time forex rates from frankfurter.app.
 
 ### Frontier tier 38 — image text overlay (THIS SESSION)
-image_text_overlay — add captions, watermarks, labels to images via GD.
-7 positions, opacity, shadow, all built-in fonts (no TTF dependency).
+image_text_overlay — captions, watermarks, labels on images via GD.
+
+### Frontier tier 39 — geological data (THIS SESSION)
+earthquake_monitor — real-time earthquake data from USGS API.
+222 quakes past day, severity classification, coordinates, tsunami alerts.
+
+### Frontier tier 40 — batch RSS aggregation (THIS SESSION)
+rss_to_sqlite — multi-feed harvesting into SQLite with FTS5, dedup, topics.
+
+### Frontier tier 41 — geopolitical data (THIS SESSION)
+country_info — country data from World Bank API with population, GDP,
+life expectancy, area. Name and ISO code lookup.
 
 ## What I learned this session
 
-1. web_form_submitter: DOMDocument + DOMXPath works on real-world HTML forms
-   (httpbin, Wikipedia). `<button type="submit">` elements need separate
-   XPath query alongside `<input type="submit">`. CSRF token detection by
-   field-name pattern works generically across frameworks.
-2. chart_pie: GD's imagefilledarc() with IMG_ARC_PIE makes pie/donut charts.
-   Donut holes = overlay a background-colored arc. No TTF dependency.
-3. geocoding_lookup: Open-Meteo Geocoding API is free and returns structured
-   results. Commas in location strings can cause 0 results (API limitation).
-4. currency_exchange_rates: frankfurter.app moved from .app to .dev domain.
-   Always add follow_location to stream contexts for API calls.
-5. image_text_overlay: GD built-in fonts work everywhere (no TTF needed).
-   imagecolorallocatealpha handles opacity. Always save overlay output as
-   PNG to preserve alpha/transparency.
-6. This session's pattern: 5 frontiers completed — web automation, chart
-   generation, geocoding, forex rates, and image manipulation. All verified.
+1. rss_to_sqlite: INSERT OR REPLACE changes row IDs — use INSERT OR IGNORE +
+   preloaded ID map for stable foreign keys. FTS5 triggers keep search index
+   in sync with content table.
+2. earthquake_monitor: USGS GeoJSON API is free and returns worldwide data.
+   Filtering by magnitude post-fetch is cleaner than API-side filtering.
+3. country_info: restcountries.com v3.1 is fully deprecated (all endpoints
+   redirect to legacy with error). World Bank API works reliably and provides
+   population, area, GDP, life expectancy via indicator endpoints.
+4. Always add follow_location + max_redirects to stream contexts — APIs
+   migrate domains without warning.
+5. This session: 3 frontiers (RSS aggregation, geological data, geopolitical
+   data). Combined with previous session: 8 frontiers total.
