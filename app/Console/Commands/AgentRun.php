@@ -115,11 +115,12 @@ class AgentRun extends Command
     /**
      * Snapshot the agent's work to git at an open-ended checkpoint. Stages
      * tracked changes plus the generated tools and workspace markdown (roadmap,
-     * digests), which are gitignored, then commits to the current branch. The
-     * noisy lineage .jsonl and any binary/SQLite workspace files are left out.
+     * digests), which are gitignored, then commits to the current branch and
+     * pushes it to origin. The noisy lineage .jsonl and any binary/SQLite
+     * workspace files are left out.
      *
      * Every git failure is swallowed and reported as a warning: a checkpoint
-     * that cannot commit must never interrupt the run.
+     * that cannot commit or push must never interrupt the run.
      *
      * @param array<string, mixed> $config
      */
@@ -152,10 +153,23 @@ class AgentRun extends Command
                 $root
             );
 
-            if ($commit->isSuccessful()) {
-                $this->line("<fg=blue>⏵ Checkpoint committed at iteration {$iteration}.</>");
-            } else {
+            if (! $commit->isSuccessful()) {
                 $this->warn('Checkpoint commit failed: '.trim($commit->getErrorOutput() ?: $commit->getOutput()));
+
+                return;
+            }
+
+            $this->line("<fg=blue>⏵ Checkpoint committed at iteration {$iteration}.</>");
+
+            // Publish the checkpoint. A push failure (offline, rejected,
+            // no upstream) is a warning, never fatal — the commit is safe
+            // locally and the next checkpoint will try to push again.
+            $push = $this->runGit(['push', 'origin', 'HEAD'], $root);
+
+            if ($push->isSuccessful()) {
+                $this->line("<fg=blue>⏵ Checkpoint pushed to origin.</>");
+            } else {
+                $this->warn('Checkpoint push failed (commit is saved locally): '.trim($push->getErrorOutput() ?: $push->getOutput()));
             }
         } catch (\Throwable $e) {
             $this->warn('Checkpoint skipped (git error): '.$e->getMessage());

@@ -10,13 +10,13 @@ counting your own tools. This file outlives every session; keep it short.
 
 - [ ] `sse_stream_listener` — connect to a Server-Sent Events (SSE) endpoint using PHP streams, read the event stream line-by-line, and persist events to SQLite. First real-time streaming capability.
 
-- [ ] `image_search` — search for images from public APIs (Unsplash/Pexels) and download the best match to workspace. Composes HTTP fetch + image_downloader.
+- [ ] `image_search` — search for images from Wikimedia Commons (free API, no key), download the best match.
 
-- [ ] `calendar_feed_reader` — fetch and parse public ICS/iCal calendar feeds, extract events with dates/times/locations, persist to SQLite. First calendar/event data capability.
+- [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
 
-- [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest. Composes feed_watcher + text_summarizer.
+- [ ] `dataset_merge` — join/harvest from multiple APIs and merge related datasets in SQLite by matching foreign keys across tables.
 
-- [ ] `dataset_merge` — join/harvest from multiple APIs and merge related datasets in SQLite by matching foreign keys across tables. Cross-dataset relationship building.
+- [ ] `webpage_screenshot` — render a webpage to an image using a headless browser or API. First visual rendering capability.
 
 ## Standing rules
 
@@ -77,12 +77,16 @@ ip_geolocation.
 ### Frontier tier 16 — financial market data
 crypto_ticker.
 
-### Frontier tier 17 — data synchronization (this session)
-two_way_sync — row-level diff and sync between SQLite databases.
-  - DIFF mode: correctly identifies rows only in A, only in B, and changed rows ✓
-  - A→B sync: inserted row 2, updated row 3, deleted row 4, 0 errors ✓
-  - Bidirectional merge: keep_newer strategy correctly propagated B's newer value ✓
-  - Both databases consistent after sync in all test cases ✓
-  - Supports: a_to_b, b_to_a, bidirectional directions
-  - Supports: a_wins, b_wins, keep_newer conflict resolution
-  - Configurable: primary key, timestamp column, create_table for auto-schema
+### Frontier tier 17 — data synchronization
+two_way_sync.
+
+### Frontier tier 18 — calendar/event data (this session)
+calendar_feed_reader — fetches ICS/iCal feeds, parses RFC 5545 format, persists to SQLite.
+  - Fetched 120KB US Holidays feed from Google Calendar ✓
+  - Parsed 317 VEVENT components (aligned under max_events limit) ✓
+  - Correctly extracted dates: "Martin Luther King Jr. Day" → 2021-01-18 ✓
+  - Correctly extracted descriptions, status codes, UIDs ✓
+  - Stored all events in SQLite with proper timestamps ✓
+  - Bugfix: Google's ICS uses unquoted VALUE=DATE parameters; first version
+    only matched quoted "VALUE=DATE" patterns. Fixed regex to handle both.
+  - Implements full RFC 5545: line unfolding, BEGIN/END nesting, params, escapes
