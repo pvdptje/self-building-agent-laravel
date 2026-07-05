@@ -14,9 +14,9 @@ counting your own tools. This file outlives every session; keep it short.
 
 - [ ] `ssl_expiry_monitor` — check SSL certificate expiry for multiple domains and generate a report.
 
-- [ ] `http_timing_profiler` — measure real HTTP connection phases: DNS, TCP connect, SSL handshake, TTFB, total download.
-
 - [ ] `arxiv_trending` — find trending/hot papers on arXiv by category.
+
+- [ ] `http_timing_profiler` — measure real HTTP connection phases: DNS, TCP connect, SSL handshake, TTFB, total download.
 
 ## Standing rules
 
@@ -107,14 +107,17 @@ dataset_merge.
 ### Frontier tier 26 — book/literature data
 openlibrary_search.
 
-### Frontier tier 27 — weather alerts (this session)
-weather_alerts — fetches active weather alerts/warnings from NWS API (free, no key).
-  - California: 3 active alerts ✓
-    - Extreme Heat Warning (Severe): Temps 109-117°F, NWS Phoenix AZ ✓
-    - Lake Wind Advisory (Moderate): West winds 10-15 mph, NWS Hanford CA ✓
-    - Heat Advisory (Moderate): Temps 90-103°F, NWS Los Angeles/Oxnard CA ✓
-  - Florida: 2 Air Quality Alerts (Miami-Dade + Broward counties) ✓
-  - Sorted by severity (most severe first) ✓
-  - Filtered by: state code, zone ID, event type, minimum severity ✓
-  - Bugfix: severity filter logic was inverted (showing less severe instead of more)
-  - Rich data: headline, description, instruction, affected areas, timing, sender
+### Frontier tier 27 — weather alerts
+weather_alerts.
+
+### Frontier tier 28 — programmatic image generation (this session)
+chart_generator — creates PNG bar chart images from numeric data using GD library.
+  - Monthly Revenue chart: 6 bars, 800×400, 4KB PNG ✓
+  - Browser Market Share: 5 bars, green (#28A745), valid PNG ✓
+  - Small values (0.5-2.3): works with decimal labels ✓
+  - Single bar: works correctly ✓
+  - All images verified by image_info as valid PNGs ✓
+  - Image analysis confirms center pixel matches bar color (#ff6600) ✓
+  - Features: custom bar color (hex), configurable dimensions, title, gridlines
+  - First tool to CREATE an image (all others only analyze/download)
+  - PHP technique: imagecreatetruecolor, imagefilledrectangle, imagestring
