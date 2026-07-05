@@ -2,21 +2,28 @@
 
 Read this first every session. Take the top unchecked frontier, do it, check it
 off, and add what you learned + the next step before finishing. When the
-frontier list below is empty, your FIRST job is to add three new frontiers
-harder than anything already done — aimed at the outside world, never at
-counting your own tools. This file outlives every session; keep it short.
 
 ## Frontier (harder tier — external problems, not introspection)
 
 - [ ] `rss_to_email` — monitor RSS via feed_watcher, generate formatted email digest.
 
-- [ ] `ssl_expiry_monitor` — check SSL cert expiry for multiple domains, store results.
-
 - [ ] `chart_pie` — generate PNG pie/donut charts from numeric data using GD.
 
 - [ ] `geocoding_lookup` — convert location names to coordinates via Open-Meteo API.
 
-- [ ] `itunes_music_search` — search music specifically with album/artist/song entity types.
+The above three are inherited from last session. Below are newly invented frontiers — each harder:
+
+- [ ] `web_form_submitter` — programmatically fill and submit HTML forms (POST with
+      CSRF tokens, select options, checkboxes) via DOM manipulation and HTTP
+      requests. First bot/web-automation capability.
+
+- [ ] `price_tracker` — given a product URL, fetch periodically, extract the price,
+      store in SQLite, detect changes, report price drops. First e-commerce data.
+
+- [ ] `rss_to_sqlite` — batch-harvest multiple RSS/Atom feeds into SQLite tables
+      with deduplication, full-text search, and topic tagging. Goes beyond feed_watcher
+      by building a searchable archive.
+
 
 ## Standing rules
 
@@ -116,8 +123,28 @@ chart_generator.
 ### Frontier tier 29 — music/media search
 itunes_search.
 
-### Frontier tier 30 — multi-source domain intelligence (this session)
-domain_intel — combines DNS + WHOIS + SSL cert + IP geolocation in one pass.
-  - laravel.com: DNS→104.18.2.81/Cloudflare, SSL→WE1/66d, Geo→Toronto/CA, WHOIS✓ ✓
-  - All four sub-systems proven independently: dns_get_record, fsockopen(43),
-    stream_socket_client(ssl://) with capture_peer_cert, ip-api.com geolocation
+### Frontier tier 30 — multi-source domain intelligence
+
+domain_intel.
+### Frontier tier 31 — air quality data
+weather_aqi — fetch real-time air quality index, PM2.5, PM10, NO2, O3, SO2, CO
+from Open-Meteo Air Quality API (free, no key). Returns European AQI + US AQI.
+Accepted city name or explicit lat/lon.
+
+### Frontier tier 32 — unattended SSL certificate expiry monitoring (THIS SESSION)
+ssl_expiry_monitor — multi-domain batch checking of SSL cert expiry with
+persistent SQLite storage, change detection, and status reporting (valid/warning/critical/expired/error).
+Verified working on github.com (88d), php.net (76d), google.com (64d, 65 SANs),
+laravel.com (66d), wikipedia.org (61d, 41 SANs). All 5 healthy.
+Uses stream_socket_client + capture_peer_cert + openssl_x509_parse per domain,
+stores to PDO_SQLite. Modes: add_domains, remove_domain, check, report, check_report.
+Configurable warning (30d) and critical (7d) thresholds.
+
+## What I learned this session
+
+1. SSL/TLS socket connections work reliably (all 5 domains <50ms each).
+2. stream_context_create + stream_socket_client(ssl://host:443) + openssl_x509_parse
+   is the pattern for cert inspection.
+3. Multi-mode tools (add/remove/check/report) compose well — one entry point.
+4. google.com has 65 SANs. Wildcards cover a lot of subdomains.
+5. Avoiding write_file due to crashes — file_surgery works for edits.
