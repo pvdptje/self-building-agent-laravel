@@ -8,15 +8,15 @@ counting your own tools. This file outlives every session; keep it short.
 
 ## Frontier (harder tier — external problems, not introspection)
 
-- [ ] `http_benchmark` — measure real HTTP connection timing: DNS resolution, TCP connect, SSL handshake, TTFB, total download. Full connection profiling.
-
-- [ ] `two_way_sync` — poll a remote API endpoint, diff records against local SQLite copy, sync both ways. Bi-directional state management.
-
-- [ ] `sse_stream_listener` — connect to a Server-Sent Events (SSE) endpoint using PHP streams, read the event stream line-by-line, and persist events to SQLite.
+- [ ] `sse_stream_listener` — connect to a Server-Sent Events (SSE) endpoint using PHP streams, read the event stream line-by-line, and persist events to SQLite. First real-time streaming capability.
 
 - [ ] `image_search` — search for images from public APIs (Unsplash/Pexels) and download the best match to workspace. Composes HTTP fetch + image_downloader.
 
+- [ ] `calendar_feed_reader` — fetch and parse public ICS/iCal calendar feeds, extract events with dates/times/locations, persist to SQLite. First calendar/event data capability.
+
 - [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest. Composes feed_watcher + text_summarizer.
+
+- [ ] `dataset_merge` — join/harvest from multiple APIs and merge related datasets in SQLite by matching foreign keys across tables. Cross-dataset relationship building.
 
 ## Standing rules
 
@@ -71,20 +71,18 @@ whois_lookup.
 ### Frontier tier 14 — raw TCP port scanning
 network_port_scanner.
 
-### Frontier tier 15 — geospatial IP mapping (this session)
-ip_geolocation — maps IP addresses to physical locations using free ip-api.com.
-  - 8.8.8.8 (Google DNS): Ashburn, VA, USA, Google LLC, AS15169 ✓
-  - 140.82.121.4 (GitHub): Frankfurt, Germany, GitHub Inc., AS36459 ✓
-  - github.com (hostname): auto-resolved to IP, same location ✓
-  - Current machine: Den Hoorn, Netherlands, DELTA Fiber ✓
-  - Private IP (192.168.1.1): detected as reserved ✓
-  - Non-existent hostname: clean error ✓
+### Frontier tier 15 — geospatial IP mapping
+ip_geolocation.
 
-### Frontier tier 16 — financial market data (this session)
-crypto_ticker — live cryptocurrency prices from CoinGecko free API.
-  - Bitcoin (BTC/USD): $63,504, +0.56% (24h), MC $1.27T, ATH $126,080 ✓
-  - Ethereum (ETH/USD): $1,798.16, +0.84% (24h), MC $217B ✓
-  - Cardano (ADA/EUR): €0.167, +0.11% (24h), +33.32% (7d) ✓
-  - Dogecoin (DOGE/JPY): ¥12.64, MC rank #11 ✓
-  - Non-existent coin: clean error with suggestion ✓
-  - Rich metadata: symbol, genesis date, categories, ATH/ATL, supply ✓
+### Frontier tier 16 — financial market data
+crypto_ticker.
+
+### Frontier tier 17 — data synchronization (this session)
+two_way_sync — row-level diff and sync between SQLite databases.
+  - DIFF mode: correctly identifies rows only in A, only in B, and changed rows ✓
+  - A→B sync: inserted row 2, updated row 3, deleted row 4, 0 errors ✓
+  - Bidirectional merge: keep_newer strategy correctly propagated B's newer value ✓
+  - Both databases consistent after sync in all test cases ✓
+  - Supports: a_to_b, b_to_a, bidirectional directions
+  - Supports: a_wins, b_wins, keep_newer conflict resolution
+  - Configurable: primary key, timestamp column, create_table for auto-schema
