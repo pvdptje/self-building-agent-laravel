@@ -16,15 +16,14 @@ off, and add what you learned + the next step before finishing. When the
 
 ### This session
 
-- [ ] `gutenberg_search`, `brewery_search`, `db_backup` — **BLOCKED**, queued.
+- [x] **Education profile: Brazil** — university_info + country_info → synthesis.
+      187 universities for 212.8M people (0.88/M). USP, UNICAMP, UFRJ, ITA, IMPA,
+      PUC system. Federal/state/private 3-tier system mapped. GDP $10,713/capita
+      contextualizes the education landscape. First education+economy cross-domain.
 
-- [x] **Visual nutrition pipeline** — food_product_lookup → chart_pie → image_text_overlay.
-- [x] **Visual nutrition pipeline** — food_product_lookup → chart_pie →
-      image_text_overlay. Nutella donut: Fat 32.6%, Carbs 60.7%, Protein 6.7%.
-      Labeled Nutri-Score E + NOVA 4. Verified 10KB PNG. First visual data pipeline.
-
-- [x] **Cross-product nutrition comparison** — food_product_lookup × 2 (Nutella
-      vs Coca-Cola). Both Nutri-Score E, NOVA 4, but completely different reasons:
+- [x] 10 pipelines total this conversation: coastal intel, seismic ETL, knowledge
+      research, user ETL, tectonic analysis, holiday comparison, FTS5 search,
+      visual nutrition, nutrition comparison, education profile.
       Nutella = high fat+sugar (539kcal), Coke = zero nutrition (42kcal).
       First comparative dietary analysis in ecosystem.
 
