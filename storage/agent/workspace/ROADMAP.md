@@ -12,11 +12,11 @@ counting your own tools. This file outlives every session; keep it short.
 
 - [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
 
-- [ ] `http_timing_profiler` — measure real HTTP connection phases: DNS, TCP connect, SSL handshake, TTFB, total download.
-
 - [ ] `ssl_expiry_monitor` — check SSL certificate expiry for multiple domains and generate a report.
 
-- [ ] `weather_alerts` — fetch active weather alerts/warnings for a region via NWS or Open-Meteo.
+- [ ] `http_timing_profiler` — measure real HTTP connection phases: DNS, TCP connect, SSL handshake, TTFB, total download.
+
+- [ ] `arxiv_trending` — find trending/hot papers on arXiv by category.
 
 ## Standing rules
 
@@ -104,11 +104,17 @@ sse_stream_listener.
 ### Frontier tier 25 — cross-database JOIN
 dataset_merge.
 
-### Frontier tier 26 — book/literature data (this session)
-openlibrary_search — searches books via the free Open Library API.
-  - "The Lord of the Rings": 918 results, 251 editions, J.R.R. Tolkien, 1954 ✓
-  - "Dune": 44,853 results, all 5 books: Dune → God Emperor (1965-1984) ✓
-  - Rich metadata: title, authors, cover URLs (S/M/L), ISBNs, edition count ✓
-  - Details mode: fetches full book info by ISBN or OLID with description ✓
-  - Cover URLs compatible with image_downloader for fetching book covers ✓
-  - Free API, no key required
+### Frontier tier 26 — book/literature data
+openlibrary_search.
+
+### Frontier tier 27 — weather alerts (this session)
+weather_alerts — fetches active weather alerts/warnings from NWS API (free, no key).
+  - California: 3 active alerts ✓
+    - Extreme Heat Warning (Severe): Temps 109-117°F, NWS Phoenix AZ ✓
+    - Lake Wind Advisory (Moderate): West winds 10-15 mph, NWS Hanford CA ✓
+    - Heat Advisory (Moderate): Temps 90-103°F, NWS Los Angeles/Oxnard CA ✓
+  - Florida: 2 Air Quality Alerts (Miami-Dade + Broward counties) ✓
+  - Sorted by severity (most severe first) ✓
+  - Filtered by: state code, zone ID, event type, minimum severity ✓
+  - Bugfix: severity filter logic was inverted (showing less severe instead of more)
+  - Rich data: headline, description, instruction, affected areas, timing, sender
