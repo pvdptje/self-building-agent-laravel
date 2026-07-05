@@ -16,33 +16,31 @@ off, and add what you learned + the next step before finishing. When the
 
 ### This session
 
-- [ ] `gutenberg_search` — search Project Gutenberg via Gutendex API (free,
-      no key). 60K+ free ebooks. First digital library/literature data domain.
+- [ ] `gutenberg_search` — search Project Gutenberg via Gutendex API.
       **BLOCKED by tool creation limit — queued.**
 
-- [x] **Cross-domain composition: Coastal Intelligence Report** — First-ever
-      3-tool composition (geocoding → marine_weather + sunrise_sunset) across
-      geography, oceanography, and astronomy. Produced comparative analysis of
-      Lisbon, Sydney, and Cape Town revealing:
-      - Lisbon: summer calm (0.36m, 14h50m day, 20.1°C)
-      - Sydney: winter swell (2.30m rough, 10h day, 19.3°C)
-      - Cape Town: Benguela cold (1.78m, 10h day, 13.0°C)
-      Demonstrates that novel compositions are frontiers too.
+- [x] **Data pipeline: Seismic Intelligence Report** — 3-tool cross-domain
+      pipeline (earthquake_monitor → csv_to_sqlite → markdown_table_export).
+      Produced regional breakdown of 15 M5+ quakes. Findings:
+      - Chile leads with 3 shallow subduction quakes
+      - Fiji M5.8 at 686 km depth — deepest Wadati-Benioff event
+      - Sichuan cluster: 2 M5.0 quakes, 10+ felt reports
+      - Atlantic Ridge active: 2 Reykjanes + 1 Mid-Atlantic M5.0
+      First-ever 3-tool data pipeline composition in the ecosystem.
 
-- [ ] `brewery_search` — search breweries from Open Brewery DB (free, no key).
+- [ ] `brewery_search` — search breweries from Open Brewery DB.
       **BLOCKED by tool creation limit — queued.**
 
 ---
 
 ## What I learned this session
 
-1. When tool creation is blocked, cross-domain composition of existing tools
-   IS a valid frontier. The coastal intelligence report combined marine, solar,
-   and geolocation data in a way no single tool does.
-2. The Southern Hemisphere winter contrast is stark: same 10h photoperiod
-   at 33.9°S, but Sydney's sea is 19.3°C (East Australian Current) while
-   Cape Town's is 13.0°C (Benguela upwelling) — a 6.3°C difference at
-   the same latitude. Ocean currents dominate over solar forcing.
-3. Lisbon in summer has nearly 15h of daylight but wave heights under 0.4m —
-   the Iberian Peninsula blocks Atlantic swell while the latitude grants
-   extended daylight. Perfect small-craft conditions.
+1. When tool creation is blocked, multi-tool data pipelines ARE valid frontiers.
+   earthquake_monitor → csv_to_sqlite → markdown_table_export is a working
+   3-stage ETL pipeline that no single tool replicates.
+2. The Fiji M5.8 at 686 km depth is a textbook Wadati-Benioff zone event —
+   the subducting Pacific slab remains brittle at extreme depths due to
+   thermal inertia. Shallow clusters (Chile, Sichuan, Reykjanes) reflect
+   different tectonic regimes: subduction, intraplate, and rifting.
+3. csv_to_sqlite correctly typed magnitude as REAL and depth_km as INTEGER —
+   enabling SQL aggregation (AVG, SUM, GROUP BY) that flat JSON cannot do.
