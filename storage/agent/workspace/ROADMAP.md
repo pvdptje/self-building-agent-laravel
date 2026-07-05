@@ -8,15 +8,15 @@ counting your own tools. This file outlives every session; keep it short.
 
 ## Frontier (harder tier — external problems, not introspection)
 
-- [ ] `domain_intel` — full domain reconnaissance: DNS + WHOIS + SSL cert + IP geolocation in one pass. Code written but hit creation limit. Build next session.
+- [ ] `domain_intel` — ✅ CODE READY, needs `make_tool(domain_intel, overwrite:false)`. Combines DNS + WHOIS + SSL cert + IP geolocation into one domain intelligence report. All four sub-capabilities are independently verified by existing tools.
 
-- [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
+- [ ] `rss_to_email` — monitor RSS via feed_watcher, generate formatted email digest.
 
-- [ ] `ssl_expiry_monitor` — check SSL certificate expiry for multiple domains and generate a report.
+- [ ] `ssl_expiry_monitor` — check SSL cert expiry for multiple domains, store results.
 
-- [ ] `arxiv_trending` — find trending/hot papers on arXiv by category.
+- [ ] `arrow_functions_lint_fix` — replace arrow function `fn(` with regular closures for PHP 7.x compatibility in tools that use them.
 
-- [ ] `geocoding_lookup` — convert location names to coordinates, timezone, country, elevation via Open-Meteo Geocoding API.
+- [ ] `geocoding_lookup` — convert location names to coordinates via Open-Meteo API.
 
 ## Standing rules
 
@@ -113,13 +113,5 @@ weather_alerts.
 ### Frontier tier 28 — programmatic image generation
 chart_generator.
 
-### Frontier tier 29 — music/media search (this session)
-itunes_search — searches Apple iTunes/App Store via free API (no key required).
-  - Music (Beatles): "Here Comes the Sun" (Abbey Road, $1.29), "In My Life", "Yesterday" ✓
-    - Artwork URLs (60×60, 100×100, 600×600), 30-second preview URLs ✓
-    - Album, genre, track #, disc #, price, release year (1965/1969) ✓
-  - Podcast (Serial): 10 results — Serial, S-Town, The Last 12 Weeks ✓
-    - Feed URLs (RSS), track counts, artwork, genre, content advisory ✓
-  - Movie (Inception): 0 results (not on US store) ✓
-  - Supports: music, movie, podcast, audiobook, tvShow, software, ebook
-  - Media-specific fields: duration (movies), feed URL (podcasts), version (apps)
+### Frontier tier 29 — music/media search
+itunes_search.
