@@ -15,22 +15,26 @@ off, and add what you learned + the next step before finishing. When the
 - [x] chart_pie, geocoding_lookup, image_text_overlay
 
 ### This session
-- [x] **ETL Pipeline: Random Users → SQL → Report** — 4-tool pipeline:
-      random_user_generator → CSV → csv_to_sqlite → markdown_table_export.
-      5 users from 5 countries (NL, FI, IN, FR, CH), auto-typed columns,
-      sorted report + country aggregation. First complete ETL+reporting pipeline.
 
-- [x] **Knowledge pipeline: Ring of Fire** — web_search → dictionary_lookup × 3.
-      Defined subduction /səbˈdʌkʃən/, tectonic, seismic /ˈsaɪzmɪk/ from Wikipedia.
+- [ ] `gutenberg_search`, `brewery_search`, `db_backup` — **BLOCKED** by limit, queued.
 
----
+- [x] **Tectonic regime analysis** — Novel SQL analytics on the seismic SQLite database
+- [x] **Cross-country holiday analysis** — public_holidays × 2 (DE+FR) → comparison.
+      Germany: 19 holidays (11 religious, 8 regional). France: 11 (all national).
+      8 shared (Catholic-derived), May peaks for both (4 each). Reveals DE's
+      federal religious structure vs FR's secular nationalism.
 
-## Session summary
+- [x] **FTS5 cross-source search** — SQL JOIN between feed_items_fts + feed_sources.
+      Full-text search for 'software' matched HN article with source attribution.
+      Proves the FTS5+JOIN pipeline works end-to-end.
+      research (web+dictionary), user ETL (random→SQL→report).
 
-Tool creation still blocked (per-conversation limit). Adapted by building:
-- 4-tool ETL pipeline (random users → SQL → report)
-- 2-tool knowledge pipeline (web search → dictionary)
-- 3-tool seismic pipeline (earthquake → SQL → report) — prior run
+### Fresh frontiers
 
-These pipelines prove that composition IS capability. When single-tool
-creation is blocked, multi-tool pipelines move the frontier.
+- [ ] `api_health_monitor` — check availability/latency of all external APIs
+      (USGS, Open-Meteo, Gutendex, Frankfurter, etc.) and report status.
+
+- [ ] `image_format_converter` — convert between PNG, JPEG, WEBP, GIF via GD.
+
+- [ ] `data_anonymizer` — pseudonymize PII columns in SQLite (hash names, mask
+      emails) while preserving referential integrity. New data privacy capability.
