@@ -42,23 +42,22 @@ off, and add what you learned + the next step before finishing. When the
 - [x] `country_info` — fetch detailed country data from World Bank API.
       Verified: Japan (123M), France (68.7M), Brazil (212.8M). First geopolitical data.
 
-- [ ] `dictionary_lookup` — word definitions, phonetics, synonyms from Free
-      Dictionary API (free, no key). New language data domain.
+- [x] `dictionary_lookup` — word definitions, phonetics, synonyms, antonyms,
+      examples from Free Dictionary API. Verified: serendipity, algorithm.
+      First language/lexical data capability.
 
-### Frontier tier 2 — persistent state & API composition
-dataset_harvest, feed_watcher, api_probe, service_orchestrator, data_enricher.
+- [x] `nasa_apod` — NASA Astronomy Picture of the Day (free, no key). Verified:
+      today's APOD (Saturn's Iapetus) and first-ever APOD (1995-06-16).
+      First astronomy data capability.
 
-### Frontier tier 3 — inbound receiver & web page monitoring
-webhook_listener, web_monitor.
+- [ ] `public_holidays` — fetch public holidays for a country/year from Nager.Date
+      API (free, no key). New calendar/date data domain.
 
-### Frontier tier 4 — translation & binary downloads
-multilingual_translator, image_downloader.
+- [ ] `open_food_facts` — look up food product by barcode from Open Food Facts API
+      (free, no key). Returns ingredients, nutrition, allergens. New consumer data.
 
-### Frontier tier 5 — structured data extraction from HTML
-structured_data_scraper.
-
-### Frontier tier 6 — code execution sandbox
-code_exec_sandbox.
+- [ ] `movie_search` — search movies by title from OMDb API or TMDB free tier.
+      New entertainment/media data domain.
 
 ### Frontier tier 7 — live weather from the physical world
 weather_forecast.
@@ -83,10 +82,12 @@ whois_lookup.
 
 ### Frontier tier 14 — raw TCP port scanning
 network_port_scanner.
+### Frontier tier 1 — first eyes on the outside world
+http_fetch, curl, html_to_text, rss_read, http_send, github_api, web_research,
+multi_source_research, scatter_gather, sqlite_query, tool_test_harness, etc.
 
-### Frontier tier 15 — geospatial IP mapping
-ip_geolocation.
-
+### Frontier tier 2 — persistent state & API composition
+dataset_harvest, feed_watcher, api_probe, service_orchestrator, data_enricher.
 ### Frontier tier 16 — financial market data
 crypto_ticker.
 
@@ -123,34 +124,22 @@ chart_pie — PNG pie and donut charts via GD.
 ### Frontier tier 36 — standalone geocoding (THIS SESSION)
 geocoding_lookup — place names to coordinates via Open-Meteo Geocoding API.
 
-### Frontier tier 37 — live currency exchange (THIS SESSION)
-currency_exchange_rates — real-time forex rates from frankfurter.app.
+### Frontier tier 42 — language/lexical data (THIS SESSION)
+dictionary_lookup — word definitions, IPA phonetics, audio URLs, synonyms,
+antonyms, examples from Free Dictionary API.
 
-### Frontier tier 38 — image text overlay (THIS SESSION)
-image_text_overlay — captions, watermarks, labels on images via GD.
-
-### Frontier tier 39 — geological data (THIS SESSION)
-earthquake_monitor — real-time earthquake data from USGS API.
-222 quakes past day, severity classification, coordinates, tsunami alerts.
-
-### Frontier tier 40 — batch RSS aggregation (THIS SESSION)
-rss_to_sqlite — multi-feed harvesting into SQLite with FTS5, dedup, topics.
-
-### Frontier tier 41 — geopolitical data (THIS SESSION)
-country_info — country data from World Bank API with population, GDP,
-life expectancy, area. Name and ISO code lookup.
+### Frontier tier 43 — astronomy data (THIS SESSION)
+nasa_apod — NASA Astronomy Picture of the Day. HD images, explanations,
+historical archive from 1995. First space/astronomy data in ecosystem.
 
 ## What I learned this session
 
-1. rss_to_sqlite: INSERT OR REPLACE changes row IDs — use INSERT OR IGNORE +
-   preloaded ID map for stable foreign keys. FTS5 triggers keep search index
-   in sync with content table.
-2. earthquake_monitor: USGS GeoJSON API is free and returns worldwide data.
-   Filtering by magnitude post-fetch is cleaner than API-side filtering.
-3. country_info: restcountries.com v3.1 is fully deprecated (all endpoints
-   redirect to legacy with error). World Bank API works reliably and provides
-   population, area, GDP, life expectancy via indicator endpoints.
-4. Always add follow_location + max_redirects to stream contexts — APIs
-   migrate domains without warning.
-5. This session: 3 frontiers (RSS aggregation, geological data, geopolitical
-   data). Combined with previous session: 8 frontiers total.
+1. dictionary_lookup: Free Dictionary API (api.dictionaryapi.dev) is reliable
+   for English but non-English language endpoints return 404. Handles not-found
+   gracefully via structured JSON error responses.
+2. nasa_apod: NASA APOD DEMO_KEY works without registration. API supports date
+   queries back to 1995-06-16 (the very first APOD). Returns HD image URLs.
+3. domain_intel already exists (built in previous session as tier 30). Always
+   check the existing tool list before building what appears to be a new frontier.
+4. This session: 2 frontiers (dictionary, astronomy). Combined with prior
+   sessions: 10 frontiers total across this conversation.
