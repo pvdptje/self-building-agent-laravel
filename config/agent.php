@@ -26,6 +26,11 @@ return [
     'max_prompt_switches_per_run' => 3,
     'max_tools_created_per_run' => 10,
 
+    // Generated tools run in an isolated child PHP process with these limits,
+    // so a runaway tool errors out instead of killing the agent loop.
+    'tool_memory_limit' => '64M',
+    'tool_timeout_seconds' => 10,
+
     // LLM providers, tried in order. A provider with a missing key is skipped,
     // and a provider that errors is abandoned for the rest of the run.
     'provider_order' => ['deepseek', 'openai'],

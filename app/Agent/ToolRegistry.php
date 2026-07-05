@@ -2,16 +2,20 @@
 
 namespace App\Agent;
 
-use ReflectionFunction;
 use RuntimeException;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
+use Symfony\Component\Process\Process;
 
 class ToolRegistry
 {
     /** @var array<string, array> Generated tool definitions, keyed by tool name. */
     private array $generated = [];
 
-    public function __construct(private string $generatedToolsPath)
-    {
+    public function __construct(
+        private string $generatedToolsPath,
+        private string $toolMemoryLimit = '64M',
+        private int|float $toolTimeoutSeconds = 10,
+    ) {
     }
 
     /**
@@ -160,28 +164,48 @@ class ToolRegistry
     }
 
     /**
+     * Run a generated tool in an isolated child PHP process with its own
+     * memory limit and timeout, so a runaway tool cannot kill the agent loop.
+     * Failures come back as an ['error' => ...] result for the model.
+     *
      * @param array<string, mixed> $arguments
      */
     public function executeGenerated(string $name, array $arguments): mixed
     {
-        if (! $this->isGenerated($name) || ! function_exists($name)) {
+        if (! $this->isGenerated($name)) {
             throw new RuntimeException("Generated tool [{$name}] is not loaded.");
         }
 
-        $reflection = new ReflectionFunction($name);
-        $ordered = [];
+        $process = new Process([
+            PHP_BINARY,
+            '-d', 'memory_limit='.$this->toolMemoryLimit,
+            __DIR__.'/scripts/run-tool.php',
+            $this->generatedToolsPath.'/'.$name.'.php',
+            $name,
+            base64_encode(json_encode($arguments)),
+        ]);
 
-        foreach ($reflection->getParameters() as $parameter) {
-            if (array_key_exists($parameter->getName(), $arguments)) {
-                $ordered[] = $arguments[$parameter->getName()];
-            } elseif ($parameter->isDefaultValueAvailable()) {
-                $ordered[] = $parameter->getDefaultValue();
-            } else {
-                $ordered[] = null;
-            }
+        $process->setTimeout($this->toolTimeoutSeconds);
+
+        try {
+            $process->run();
+        } catch (ProcessTimedOutException) {
+            return ['error' => "Tool [{$name}] was killed after running longer than {$this->toolTimeoutSeconds} seconds."];
         }
 
-        return $reflection->invokeArgs($ordered);
+        if (! $process->isSuccessful()) {
+            $detail = trim($process->getErrorOutput()."\n".$process->getOutput());
+
+            return ['error' => "Tool [{$name}] crashed: ".mb_substr($detail, 0, 500)];
+        }
+
+        $decoded = json_decode($process->getOutput(), true);
+
+        if (! is_array($decoded) || ! array_key_exists('ok', $decoded)) {
+            return ['error' => "Tool [{$name}] produced unreadable output: ".mb_substr($process->getOutput(), 0, 500)];
+        }
+
+        return $decoded['ok'] ? $decoded['result'] : ['error' => (string) $decoded['error']];
     }
 
     /**

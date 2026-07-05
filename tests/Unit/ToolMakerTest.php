@@ -163,6 +163,48 @@ PHP);
         ->and($json)->not->toContain('"items":[]');
 });
 
+it('turns a tool that exhausts memory into an error result instead of dying', function () {
+    $name = 'memory_hog_'.uniqid();
+
+    $this->maker->make($name, 'Eat all the memory.', [], '$x = []; while (true) { $x[] = str_repeat("a", 1_000_000); }');
+
+    $registry = new ToolRegistry($this->dir, toolMemoryLimit: '32M', toolTimeoutSeconds: 20);
+    $registry->refreshGenerated();
+
+    $result = $registry->executeGenerated($name, []);
+
+    expect($result)->toHaveKey('error')
+        ->and($result['error'])->toContain('crashed');
+});
+
+it('kills a tool that runs past the timeout and reports it as an error', function () {
+    $name = 'never_ends_'.uniqid();
+
+    $this->maker->make($name, 'Loop forever.', [], 'while (true) { usleep(1000); } return 1;');
+
+    $registry = new ToolRegistry($this->dir, toolTimeoutSeconds: 2);
+    $registry->refreshGenerated();
+
+    $result = $registry->executeGenerated($name, []);
+
+    expect($result)->toHaveKey('error')
+        ->and($result['error'])->toContain('longer than 2 seconds');
+});
+
+it('reports an exception thrown inside a tool as an error result', function () {
+    $name = 'always_throws_'.uniqid();
+
+    $this->maker->make($name, 'Throw.', [], 'throw new RuntimeException("boom goes the tool");');
+
+    $registry = new ToolRegistry($this->dir);
+    $registry->refreshGenerated();
+
+    $result = $registry->executeGenerated($name, []);
+
+    expect($result)->toHaveKey('error')
+        ->and($result['error'])->toContain('boom goes the tool');
+});
+
 it('puts optional schema parameters after required ones in the signature', function () {
     $name = 'greet_person_'.uniqid();
 

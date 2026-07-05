@@ -32,7 +32,11 @@ class AgentRun extends Command
             return self::FAILURE;
         }
 
-        $registry = new ToolRegistry($config['generated_tools_path']);
+        $registry = new ToolRegistry(
+            $config['generated_tools_path'],
+            $config['tool_memory_limit'],
+            $config['tool_timeout_seconds'],
+        );
 
         $runner = new AgentRunner(
             llm: new LlmClient(
