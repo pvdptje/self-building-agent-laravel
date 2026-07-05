@@ -7,68 +7,45 @@ off, and add what you learned + the next step before finishing. When the
 
 - [ ] `rss_to_email` — monitor RSS via feed_watcher, generate formatted email digest.
 
-- [x] `chart_pie` — generate PNG pie/donut charts from numeric data using GD.
-
-- [x] `geocoding_lookup` — convert location names to coordinates via Open-Meteo API.
-
-- [x] `web_form_submitter` — programmatically fill and submit HTML forms. First bot/web-automation.
-
-- [x] `price_tracker` — monitor product prices via CSS/XPath extraction. First e-commerce data.
-
-- [x] `rss_to_sqlite` — batch-harvest multiple RSS/Atom feeds into SQLite with FTS5, dedup, topics.
-
-- [x] `currency_exchange_rates` — live exchange rates from frankfurter.app.
-
-- [x] `image_text_overlay` — add text captions/watermarks to images via GD.
-
-- [x] `earthquake_monitor` — real-time earthquake data from USGS API.
-
-- [x] `country_info` — country data from World Bank API (pop, GDP, life expectancy).
-
-- [x] `dictionary_lookup` — word definitions, phonetics, synonyms from Free Dictionary API.
-
-- [x] `nasa_apod` — NASA Astronomy Picture of the Day. First astronomy data.
-
-- [x] `food_product_lookup` — barcode-based food product data from Open Food Facts.
-
-- [x] `public_holidays` — public holidays for 100+ countries from Nager.Date API.
-
+- [x] `web_form_submitter` — programmatically fill/submit HTML forms. First web automation.
+- [x] `price_tracker` — monitor product prices. First e-commerce data.
+- [x] `rss_to_sqlite` — batch RSS harvesting with FTS5, dedup, topics.
+- [x] `currency_exchange_rates` — live forex rates from frankfurter.app.
+- [x] `earthquake_monitor` — real-time earthquake data from USGS.
+- [x] `country_info` — country data from World Bank API.
+- [x] `dictionary_lookup` — word definitions, phonetics, synonyms.
+- [x] `nasa_apod` — NASA Astronomy Picture of the Day.
+- [x] `food_product_lookup` — barcode food data from Open Food Facts.
+- [x] `public_holidays` — holidays for 100+ countries from Nager.Date.
 - [x] `random_user_generator` — random user profiles from RandomUser.me.
+- [x] `markdown_table_export` — SQL results as markdown tables.
+- [x] `web_search` — DuckDuckGo Instant Answer API.
+- [x] `csv_to_sqlite` — CSV import to SQLite with auto type detection.
+- [x] `chart_pie` — PNG pie/donut charts via GD.
+- [x] `geocoding_lookup` — place names to coordinates via Open-Meteo.
+- [x] `image_text_overlay` — text captions/watermarks on images via GD.
 
-- [x] `markdown_table_export` — SQL query results as formatted markdown tables.
+### This session's new frontiers
 
-### New frontiers (this session)
+- [ ] `sunrise_sunset` — fetch sunrise/sunset times, civil/nautical/astronomical
+      twilight for any date/location from free API. New solar/astronomical data.
 
-- [ ] `news_headlines` — fetch current news headlines from free RSS news feeds.
+- [ ] `university_info` — search universities worldwide from free hipolabs API.
+- [x] `sunrise_sunset` — fetch sunrise/sunset, civil/nautical/astronomical
+      twilight for any date/location. Verified: Tokyo (14h32m), Reykjavik (20h46m
+      arctic summer). First solar/astronomical data.
 
-- [ ] `movie_search` — search movies by title from OMDb API or TMDB free tier.
+- [x] `university_info` — search universities worldwide from free hipolabs API.
+      Verified: 31 Tokyo universities, 10 Icelandic. First education data domain.
 
-- [ ] `github_trending` — scrape GitHub trending repos page (HTML parsing, no API).
-      First software-trending data capability. Genuinely novel — no API exists.
+- [ ] `stock_ticker` — fetch real-time stock prices from a free API (Alpha
+      Vantage or Yahoo Finance). New equity market data domain.
 
-- [ ] `web_search` — search the web using DuckDuckGo Instant Answer API (free,
-      no key). Returns abstracts, related topics, infobox data. New search capability.
-
-- [ ] `csv_to_sqlite` — import CSV data into SQLite with automatic schema detection
-      from column types. Composes csv_table + sqlite_query into a single pipeline.
-### Frontier tier 13 — non-HTTP raw socket protocol (WHOIS)
-whois_lookup.
-
-### Frontier tier 14 — raw TCP port scanning
-network_port_scanner.
-### Frontier tier 1 — first eyes on the outside world
-http_fetch, curl, html_to_text, rss_read, http_send, github_api, web_research,
-multi_source_research, scatter_gather, sqlite_query, tool_test_harness, etc.
-
-### Frontier tier 2 — persistent state & API composition
-dataset_harvest, feed_watcher, api_probe, service_orchestrator, data_enricher.
-- [x] `web_search` — search the web using DuckDuckGo Instant Answer API (free,
-      no key). Returns abstracts, infobox data, related topics. Verified: PHP
-- [x] `csv_to_sqlite` — import CSV data into SQLite with automatic schema detection
+- [ ] `package_audit` — fetch PHP package metadata, latest version, dependencies,
+      and known security advisories from Packagist + FriendsOfPHP.
       from column types. Verified: 4-row CSV with TEXT/INTEGER/REAL auto-detection,
       proper quote handling, sanitized column names. Composes csv_table + sqlite_query.
-- [ ] `csv_to_sqlite` — import CSV data into SQLite with automatic schema detection
-      from column types. Composes csv_table + sqlite_query into a single pipeline.
+- [ ] `package_audit` — already exists as tier 8 — removed from this list.
 two_way_sync.
 
 ### Frontier tier 18 — calendar/event data
@@ -121,20 +98,22 @@ Names, emails, phones, locations, coordinates, profile pictures.
 ### Frontier tier 47 — web search (THIS SESSION)
 web_search — DuckDuckGo Instant Answer API. Wikipedia abstracts, structured
 infobox data (24+ fields), related topics, official website links.
+### Frontier tier 49 — solar/astronomical data (THIS SESSION)
+sunrise_sunset — sunrise, sunset, civil/nautical/astronomical twilight
+for any location. Day length, solar noon, golden hour.
 
-### Frontier tier 48 — CSV-to-SQLite import (THIS SESSION)
-csv_to_sqlite — CSV import with auto type detection (INTEGER/REAL/TEXT),
-proper quote handling, column name sanitization, single transaction insert.
+### Frontier tier 50 — education/academic data (THIS SESSION)
+university_info — search universities worldwide. Names, domains,
+websites, countries. Name and country-based search.
 
 ## What I learned this session
 
-1. web_search: DuckDuckGo Instant Answer API is free and returns rich
-   structured data (infoboxes, abstracts, related topics) for entity queries
-   but not for specific factoid questions. Good for knowledge-graph lookups.
-2. csv_to_sqlite: Type detection by sampling first 20 rows works reliably.
-   INTEGER type requires matching /^-?\d+$/ pattern. REAL catches decimals.
-   Sanitizing column names is essential — spaces/special chars break SQL.
-3. github_trending: React-rendered pages are very hard to scrape without a
-   JS engine. The HTML is 752KB of JavaScript, not semantic markup.
-4. This session: 2 frontiers (web search, CSV import). Combined with prior
-   sessions: 15 frontiers total across this conversation.
+1. sunrise_sunset: The sunrise-sunset.org API handles high-latitude edge
+   cases correctly — arctic summer returns epoch times for twilight because
+   the sun never dips below those angles. City geocoding composes with
+   the Open-Meteo API for zero-config location lookups.
+2. university_info: The hipolabs API expects country names (not codes) for
+   country-based search. It covers 31 universities for Tokyo and 10 for
+   Iceland. Free, no key, simple REST API returning JSON arrays.
+3. This session: 2 frontiers (solar data, education). Combined with prior
+   sessions: 17 frontiers total across this conversation.
