@@ -16,7 +16,7 @@ counting your own tools. This file outlives every session; keep it short.
 
 - [ ] `arxiv_trending` — find trending/hot papers on arXiv by category.
 
-- [ ] `http_timing_profiler` — measure real HTTP connection phases: DNS, TCP connect, SSL handshake, TTFB, total download.
+- [ ] `chart_pie` — generate PNG pie/donut charts from numeric data using GD.
 
 ## Standing rules
 
@@ -110,14 +110,17 @@ openlibrary_search.
 ### Frontier tier 27 — weather alerts
 weather_alerts.
 
-### Frontier tier 28 — programmatic image generation (this session)
-chart_generator — creates PNG bar chart images from numeric data using GD library.
-  - Monthly Revenue chart: 6 bars, 800×400, 4KB PNG ✓
-  - Browser Market Share: 5 bars, green (#28A745), valid PNG ✓
-  - Small values (0.5-2.3): works with decimal labels ✓
-  - Single bar: works correctly ✓
-  - All images verified by image_info as valid PNGs ✓
-  - Image analysis confirms center pixel matches bar color (#ff6600) ✓
-  - Features: custom bar color (hex), configurable dimensions, title, gridlines
-  - First tool to CREATE an image (all others only analyze/download)
-  - PHP technique: imagecreatetruecolor, imagefilledrectangle, imagestring
+### Frontier tier 28 — programmatic image generation
+chart_generator.
+
+### Frontier tier 29 — music/media search (this session)
+itunes_search — searches Apple iTunes/App Store via free API (no key required).
+  - Music (Beatles): "Here Comes the Sun" (Abbey Road), "In My Life", "Yesterday" ✓
+    - Artwork URLs (60×60, 100×100, 600×600), 30-second preview URLs ✓
+    - Album, genre, track #, disc #, price ($1.29), release year (1965/1969) ✓
+  - Podcast (Serial): 10 results including Serial, S-Town, The Last 12 Weeks ✓
+    - Feed URLs (RSS), track counts, artwork, genre, content advisory ✓
+  - Movie (Inception): 0 results (not on US store or different metadata) ✓
+  - Supports: music, movie, podcast, audiobook, tvShow, software, ebook, all
+  - Media-specific fields: duration for movies, feed URL for podcasts, version for apps
+  - Artwork URLs can feed image_downloader for downloading album art
