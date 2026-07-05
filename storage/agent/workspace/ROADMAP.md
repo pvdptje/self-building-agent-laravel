@@ -8,10 +8,6 @@ counting your own tools. This file outlives every session; keep it short.
 
 ## Frontier (harder tier — external problems, not introspection)
 
-- [ ] `domain_intel` — ✅ CODE PROVEN. All four sub-components tested live on github.com:
-  DNS→140.82.121.4, WHOIS→MarkMonitor/2007, SSL→Sectigo/88d, Geo→Frankfurt/DE.
-  Run `make_tool(name:"domain_intel", overwrite:false)` with code from prompt.
-
 - [ ] `rss_to_email` — monitor RSS via feed_watcher, generate formatted email digest.
 
 - [ ] `ssl_expiry_monitor` — check SSL cert expiry for multiple domains, store results.
@@ -19,6 +15,8 @@ counting your own tools. This file outlives every session; keep it short.
 - [ ] `chart_pie` — generate PNG pie/donut charts from numeric data using GD.
 
 - [ ] `geocoding_lookup` — convert location names to coordinates via Open-Meteo API.
+
+- [ ] `itunes_music_search` — search music specifically with album/artist/song entity types.
 
 ## Standing rules
 
@@ -117,3 +115,9 @@ chart_generator.
 
 ### Frontier tier 29 — music/media search
 itunes_search.
+
+### Frontier tier 30 — multi-source domain intelligence (this session)
+domain_intel — combines DNS + WHOIS + SSL cert + IP geolocation in one pass.
+  - laravel.com: DNS→104.18.2.81/Cloudflare, SSL→WE1/66d, Geo→Toronto/CA, WHOIS✓ ✓
+  - All four sub-systems proven independently: dns_get_record, fsockopen(43),
+    stream_socket_client(ssl://) with capture_peer_cert, ip-api.com geolocation
