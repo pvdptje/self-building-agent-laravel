@@ -101,9 +101,7 @@ class ToolMaker
      */
     private function render(string $name, string $description, array $schema, string $code): string
     {
-        $parameters = $schema;
-        $parameters['type'] = $parameters['type'] ?? 'object';
-        $parameters['properties'] = $parameters['properties'] ?? [];
+        $parameters = SchemaNormalizer::normalize($schema);
 
         $definition = [
             'type' => 'function',

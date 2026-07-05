@@ -86,6 +86,83 @@ it('rejects creating a tool with a name that already exists on disk', function (
         ->and(implode(' ', $second))->toContain('already exists');
 });
 
+it('encodes a parameterless tool schema as a JSON object, not an array', function () {
+    $name = 'coin_flip_'.uniqid();
+
+    $result = $this->maker->make($name, 'Flip a coin.', [], 'return random_int(0, 1) === 1 ? "heads" : "tails";');
+
+    expect($result['ok'])->toBeTrue();
+
+    $registry = new ToolRegistry($this->dir);
+    $registry->refreshGenerated();
+
+    $definition = collect($registry->allDefinitions())->firstWhere('function.name', $name);
+
+    expect(json_encode($definition))->toContain('"parameters":{"type":"object","properties":{}}');
+});
+
+it('encodes nested empty schema fragments as objects while keeping required a JSON array', function () {
+    $name = 'pick_random_'.uniqid();
+
+    $result = $this->maker->make($name, 'Pick random items.', [
+        'type' => 'object',
+        'properties' => [
+            'items' => ['type' => 'array', 'description' => 'List of items.', 'items' => []],
+        ],
+        'required' => ['items'],
+    ], 'return $items[array_rand($items)];');
+
+    expect($result['ok'])->toBeTrue();
+
+    $registry = new ToolRegistry($this->dir);
+    $registry->refreshGenerated();
+
+    $json = json_encode(collect($registry->allDefinitions())->firstWhere('function.name', $name));
+
+    expect($json)->toContain('"items":{}')
+        ->and($json)->toContain('"required":["items"]')
+        ->and($json)->not->toContain('"items":[]');
+});
+
+it('normalizes broken schemas from tool files that already exist on disk', function () {
+    $name = 'legacy_tool_'.uniqid();
+
+    // A file written before schema normalization existed: empty arrays where
+    // JSON Schema expects objects.
+    file_put_contents($this->dir.'/'.$name.'.php', <<<PHP
+<?php
+
+\$toolDefinition_{$name} = [
+    'type' => 'function',
+    'function' => [
+        'name' => '{$name}',
+        'description' => 'Legacy tool with a broken schema.',
+        'parameters' => [
+            'type' => 'object',
+            'properties' => [
+                'stuff' => ['type' => 'array', 'items' => []],
+            ],
+        ],
+    ],
+];
+
+if (! function_exists('{$name}')) {
+    function {$name}(\$stuff = null)
+    {
+        return \$stuff;
+    }
+}
+PHP);
+
+    $registry = new ToolRegistry($this->dir);
+    $registry->refreshGenerated();
+
+    $json = json_encode(collect($registry->allDefinitions())->firstWhere('function.name', $name));
+
+    expect($json)->toContain('"items":{}')
+        ->and($json)->not->toContain('"items":[]');
+});
+
 it('puts optional schema parameters after required ones in the signature', function () {
     $name = 'greet_person_'.uniqid();
 

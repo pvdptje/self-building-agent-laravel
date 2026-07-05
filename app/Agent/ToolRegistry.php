@@ -129,6 +129,12 @@ class ToolRegistry
 
             $name = $definition['function']['name'];
 
+            // Normalize schemas from disk too, so a tool generated before
+            // normalization existed cannot poison the API request.
+            if (is_array($definition['function']['parameters'] ?? null)) {
+                $definition['function']['parameters'] = SchemaNormalizer::normalize($definition['function']['parameters']);
+            }
+
             if (! in_array($name, $this->builtInNames(), true)) {
                 $this->generated[$name] = $definition;
             }
