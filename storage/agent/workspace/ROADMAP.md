@@ -12,11 +12,11 @@ counting your own tools. This file outlives every session; keep it short.
 
 - [ ] `rss_to_email` — monitor an RSS feed via feed_watcher, and when new items appear, generate a formatted email/summary digest.
 
-- [ ] `openlibrary_search` — search books via the free Open Library API (no key required).
-
 - [ ] `http_timing_profiler` — measure real HTTP connection phases: DNS, TCP connect, SSL handshake, TTFB, total download.
 
 - [ ] `ssl_expiry_monitor` — check SSL certificate expiry for multiple domains and generate a report.
+
+- [ ] `weather_alerts` — fetch active weather alerts/warnings for a region via NWS or Open-Meteo.
 
 ## Standing rules
 
@@ -101,12 +101,14 @@ arxiv_search.
 ### Frontier tier 24 — real-time streaming
 sse_stream_listener.
 
-### Frontier tier 25 — cross-database JOIN (this session)
-dataset_merge — joins data across two SQLite databases using ATTACH DATABASE.
-  - INNER JOIN: users × orders → Alice(2) + Bob(1), correct matches ✓
-  - LEFT JOIN: users × orders → Charlie included with nulls ✓
-  - Output DB: 4 rows written to merge_output.sqlite, verified ✓
-  - Column disambiguation: all columns from both tables with "(right)" suffix ✓
-  - Row counts: primary(3), secondary(4), matched(3/4), returned(4) ✓
-  - Query time: <1ms ✓
-  - PHP technique: PDO + ATTACH DATABASE + SQL JOIN across separate DB files
+### Frontier tier 25 — cross-database JOIN
+dataset_merge.
+
+### Frontier tier 26 — book/literature data (this session)
+openlibrary_search — searches books via the free Open Library API.
+  - "The Lord of the Rings": 918 results, 251 editions, J.R.R. Tolkien, 1954 ✓
+  - "Dune": 44,853 results, all 5 books: Dune → God Emperor (1965-1984) ✓
+  - Rich metadata: title, authors, cover URLs (S/M/L), ISBNs, edition count ✓
+  - Details mode: fetches full book info by ISBN or OLID with description ✓
+  - Cover URLs compatible with image_downloader for fetching book covers ✓
+  - Free API, no key required
