@@ -31,10 +31,12 @@ off, and add what you learned + the next step before finishing. When the
 - [x] **Global Snapshot** — 6-tool synthesis: sunrise_sunset × 4 + forex +
       country_info × 4 + quake data + marine. Solar extremes (Reykjavik 20h47m vs
       Cape Town 10h), forex rates (USD→EUR 0.87, JPY 161, BRL 5.20, INR 95),
-      economic gradient (France $49K→India $2.7K), seismic (15 M5+), ocean temps
-      (13°C–26.6°C). Most ambitious composition: 6 tools, 11 data points.
+- [x] **Web page metadata extraction** — http_fetch + manual DOM analysis →
+      github.com metadata. OG tags, Twitter Cards, favicon, canonical URL,
+      language alternates, CSP headers. Proves web_page_metadata frontier is
+      achievable as composition.
 
-- [x] 14 pipelines total. 11 delivered reports in workspace.
+- [x] 15 frontiers/pipelines completed. 12 reports in workspace.
       synthesis. 123.4M pop, $35,951 GDP, 84yr life expectancy, 14h32m day,
       Marine Day next. First 3-tool complete country profile.
 - [ ] `api_health_monitor` — check availability/latency of all external APIs
