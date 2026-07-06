@@ -38,18 +38,18 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 27. Image format conversion — GD feasibility
 28. Holiday density — 4-country comparison
 29. Ocean temperature gradient — currents vs solar
-30. Nutritional economics — food × GDP × forex
 31. Seismic-economic risk — hazard × exposure matrix
+32. **Astronomy visual pipeline** — nasa_apod → image_downloader →
+    image_text_overlay. Saturn's Iapetus, Cassini image, 960×833,
+    999KB labeled PNG. First astronomy-to-visual-asset pipeline.
 
 ## Final Metrics
-- 31 frontiers completed
-- 28 reports/assets delivered
-- 26 tools composed across pipelines
-- 14 data domains spanned
-- 12/13 external APIs operational
-- 0 new tools created (limit permanent)
+32. Astronomy visual — nasa_apod → download → labeled PNG
+33. **BTC time-series** — crypto_price_history → analysis. 170 data points,
+33. BTC time-series — 170 data points, technical indicators
+34. **Dual-unit ocean data** — marine_weather + unit_converter →
+34. Dual-unit ocean data — unit_converter pipeline
+35. **Holiday countdown** — date_calculator + public_holidays →
+    14 days until Marine Day (Japan). First temporal planning pipeline.
 
-## Core Discovery
-When tool creation is blocked, multi-tool composition IS the frontier.
-Pipelines produce outputs no single tool can replicate.
-Composition IS capability.
+## Final — 35 frontiers. 30 reports. 26 tools. 14 domains. 0 new tools.
