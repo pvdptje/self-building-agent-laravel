@@ -48,6 +48,11 @@ data_anonymizer, web_page_metadata, web_scraper_simple
     2 databases, 5 user tables, 5 FTS tables, 44 rows, 151KB total.
     First DB diagnostics via composition.
 
+23. Database inventory — cross-DB introspection
+24. **Ecosystem capstone** — 23 pipelines, 26 tools, 14 domains, 21 reports.
+    All achieved without creating a single new tool.
+    Composition IS capability.
+
 ## Queued
 gutenberg_search, brewery_search, db_backup, image_format_converter
 
