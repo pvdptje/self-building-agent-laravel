@@ -60,41 +60,24 @@ $toolDefinition_text_progress_bar = array (
 if (! function_exists('text_progress_bar')) {
     function text_progress_bar($value, $max = null, $width = null, $fill_char = null, $empty_char = null, $show_percent = null, $label = null)
     {
-        $maxVal = $max ?? 100;
-        $barWidth = $width ?? 20;
-        $fill = $fill_char ?? '█';
-        $empty = $empty_char ?? '░';
-        $percent = $show_percent ?? true;
-        $labelText = $label ?? '';
+        // Generate a text-based progress bar
+        $value=isset($value)?(float)$value:0;
+        $max=isset($max)?max(0.01,(float)$max):100;
+        $width=isset($width)?max(5,min(100,(int)$width)):20;
+        $fill=isset($fill_char)?(string)$fill_char:'█';
+        $empty=isset($empty_char)?(string)$empty_char:'░';
+        $show_pct=isset($show_percent)?(bool)$show_percent:true;
+        $label=isset($label)?(string)$label:'';
 
-        if ($maxVal <= 0) $maxVal = 1;
-        $ratio = max(0, min(1, $value / $maxVal));
-        $filledBars = (int)round($ratio * $barWidth);
-        $emptyBars = $barWidth - $filledBars;
+        $pct=min(100,max(0,$value/$max*100));
+        $filled=(int)round($pct/100*$width);
+        $bar=str_repeat($fill,$filled).str_repeat($empty,$width-$filled);
 
-        $bar = str_repeat($fill, $filledBars) . str_repeat($empty, $emptyBars);
+        $result='';
+        if($label!=='')$result.=$label.' ';
+        $result.='['.$bar.']';
+        if($show_pct)$result.=' '.round($pct,1).'%';
 
-        $pct = round($ratio * 100, 1);
-
-        $output = '';
-        if ($labelText !== '') {
-            $output .= $labelText . ' ';
-        }
-        $output .= '[' . $bar . ']';
-        if ($percent) {
-            $output .= " {$pct}%";
-        }
-
-        // Return structured data too
-        return json_encode([
-            'bar_string' => $output,
-            'value' => $value,
-            'max' => $maxVal,
-            'percentage' => $pct,
-            'filled' => $filledBars,
-            'empty' => $emptyBars,
-            'width' => $barWidth,
-            'rendered' => $output,
-        ]);
+        return['success'=>true,'bar'=>$result,'percent'=>round($pct,1),'filled'=>$filled,'total'=>$width];
     }
 }
