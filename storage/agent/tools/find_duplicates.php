@@ -54,145 +54,56 @@ $toolDefinition_find_duplicates = array (
 if (! function_exists('find_duplicates')) {
     function find_duplicates($path = null, $hash_algo = null, $min_size = null, $max_depth = null, $show_hidden = null, $timeout = null)
     {
-        // Duplicate file finder by content hash (MD5/SHA256)
-        // Finds files with identical content regardless of filename
+        // Find duplicates by content hash - MD5/SHA256
+        $input_path=isset($path)?(string)$path:'storage/agent/workspace';
+        $hash_algo=isset($hash_algo)?(string)$hash_algo:'md5';
+        $min_size=isset($min_size)?max(0,(int)$min_size):1;
+        $max_depth=isset($max_depth)?max(0,(int)$max_depth):10;
+        $show_hidden=isset($show_hidden)?(bool)$show_hidden:false;
+        $timeout=isset($timeout)?min(max((int)$timeout,5),60):30;
+        if(!in_array($hash_algo,['md5','sha256','both']))$hash_algo='md5';
 
-        $input_path = isset($path) ? (string)$path : 'storage/agent/workspace';
-        $hash_algo = isset($hash_algo) ? (string)$hash_algo : 'md5';
-        $min_size = isset($min_size) ? max(0, (int)$min_size) : 1;
-        $max_depth = isset($max_depth) ? max(0, (int)$max_depth) : 10;
-        $show_hidden = isset($show_hidden) ? (bool)$show_hidden : false;
-        $timeout = isset($timeout) ? min(max((int)$timeout, 5), 60) : 30;
-
-        if (!in_array($hash_algo, ['md5', 'sha256', 'both'])) {
-            $hash_algo = 'md5';
+        $full_path=realpath($input_path);
+        if($full_path===false||!is_dir($full_path)){
+            $pr=realpath(__DIR__.'/../../..');
+            $full_path=realpath($pr.'/'.$input_path);
         }
+        if($full_path===false||!is_dir($full_path))return['error'=>"Dir not found: {$input_path}"];
 
-        // Resolve path
-        $full_path = realpath($input_path);
-        if ($full_path === false || !is_dir($full_path)) {
-            $project_root = realpath(__DIR__ . '/../../..');
-            $full_path = realpath($project_root . '/' . ltrim($input_path, '/'));
-        }
-        if ($full_path === false || !is_dir($full_path)) {
-            return ['error' => "Directory not found: {$input_path}"];
-        }
-
-        $start_time = microtime(true);
-        $deadline = $start_time + $timeout;
-
-        try {
-            $hash_map = []; // hash => [size, [paths...]]
-            $total_files = 0;
-            $total_bytes = 0;
-            $errored = 0;
-            $skipped_size = 0;
-            $skipped_hidden = 0;
-            
-            $flags = RecursiveDirectoryIterator::SKIP_DOTS;
-            $iterator = new RecursiveDirectoryIterator($full_path, $flags);
-            $recursive = new RecursiveIteratorIterator($iterator, RecursiveIteratorIterator::SELF_FIRST, RecursiveIteratorIterator::CATCH_GET_CHILD);
-            if ($max_depth > 0) $recursive->setMaxDepth($max_depth);
-            
-            foreach ($recursive as $item) {
-                if (microtime(true) > $deadline) break;
-                if (!$item->isFile()) continue;
-                
-                $basename = $item->getBasename();
-                if (!$show_hidden && $basename !== '' && $basename[0] === '.') {
-                    $skipped_hidden++;
-                    continue;
-                }
-                
-                $size = $item->getSize();
-                if ($size < $min_size) { $skipped_size++; continue; }
-                
-                $realpath = $item->getRealPath();
-                if ($realpath === false) { $errored++; continue; }
-                
-                // Read file content and hash it
-                $content = @file_get_contents($realpath);
-                if ($content === false) { $errored++; continue; }
-                
-                if ($hash_algo === 'both') {
-                    $hash = md5($content) . ':' . hash('sha256', $content);
-                } else {
-                    $hash = $hash_algo === 'sha256' ? hash('sha256', $content) : md5($content);
-                }
-                
-                if (!isset($hash_map[$hash])) {
-                    $hash_map[$hash] = ['size' => $size, 'paths' => []];
-                }
-                $hash_map[$hash]['paths'][] = $realpath;
-                $total_files++;
-                $total_bytes += $size;
+        $st=microtime(true);$dl=$st+$timeout;
+        try{
+            $hm=[];$tf=0;$tb=0;$er=0;$ss=0;$sh=0;
+            $it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($full_path,RecursiveDirectoryIterator::SKIP_DOTS));
+            if($max_depth>0)$it->setMaxDepth($max_depth);
+            foreach($it as$item){
+                if(microtime(true)>$dl)break;
+                if(!$item->isFile())continue;
+                $bn=$item->getBasename();
+                if(!$show_hidden&&$bn!==''&&$bn[0]==='.'){$sh++;continue;}
+                $sz=$item->getSize();
+                if($sz<$min_size){$ss++;continue;}
+                $rp=$item->getRealPath();if($rp===false){$er++;continue;}
+                $c=@file_get_contents($rp);if($c===false){$er++;continue;}
+                $h=$hash_algo==='both'?md5($c).':'.hash('sha256',$c):($hash_algo==='sha256'?hash('sha256',$c):md5($c));
+                if(!isset($hm[$h]))$hm[$h]=['size'=>$sz,'paths'=>[]];
+                $hm[$h]['paths'][]=$rp;$tf++;$tb+=$sz;
             }
-            
-            $elapsed = round((microtime(true) - $start_time) * 1000, 1);
-            
-            // Extract duplicates
-            $duplicates = [];
-            $dup_count = 0;
-            $dup_bytes = 0;
-            $dup_groups = 0;
-            
-            foreach ($hash_map as $hash => $info) {
-                if (count($info['paths']) > 1) {
-                    $group_size = $info['size'];
-                    $wasted = $group_size * (count($info['paths']) - 1);
-                    $dup_count += count($info['paths']);
-                    $dup_bytes += $wasted;
-                    $dup_groups++;
-                    
-                    $duplicates[] = [
-                        'hash' => $hash,
-                        'size' => $group_size,
-                        'size_human' => $group_size >= 1073741824 ? round($group_size / 1073741824, 2) . ' GB' : ($group_size >= 1048576 ? round($group_size / 1048576, 2) . ' MB' : ($group_size >= 1024 ? round($group_size / 1024, 1) . ' KB' : $group_size . ' B')),
-                        'count' => count($info['paths']),
-                        'wasted_bytes' => $wasted,
-                        'wasted_human' => $wasted >= 1073741824 ? round($wasted / 1073741824, 2) . ' GB' : ($wasted >= 1048576 ? round($wasted / 1048576, 2) . ' MB' : ($wasted >= 1024 ? round($wasted / 1024, 1) . ' KB' : $wasted . ' B')),
-                        'paths' => $info['paths'],
-                    ];
+            $el=round((microtime(true)-$st)*1000,1);
+            $dups=[];$dc=0;$db=0;$dg=0;
+            foreach($hm as$h=>$info){
+                if(count($info['paths'])>1){
+                    $ws_=$info['size']*(count($info['paths'])-1);$dc+=count($info['paths']);$db+=$ws_;$dg++;
+                    $szh=$info['size']>=1073741824?round($info['size']/1073741824,2).' GB':($info['size']>=1048576?round($info['size']/1048576,2).' MB':($info['size']>=1024?round($info['size']/1024,1).' KB':$info['size'].' B'));
+                    $wsh=$ws_>=1073741824?round($ws_/1073741824,2).' GB':($ws_>=1048576?round($ws_/1048576,2).' MB':($ws_>=1024?round($ws_/1024,1).' KB':$ws_.' B'));
+                    $dups[]=['hash'=>substr($h,0,16).'...','size'=>$info['size'],'size_human'=>$szh,'count'=>count($info['paths']),'wasted'=>$ws_,'wasted_human'=>$wsh,'paths'=>$info['paths']];
                 }
             }
-            
-            // Sort by wasted space descending
-            usort($duplicates, fn($a, $b) => $b['wasted_bytes'] - $a['wasted_bytes']);
-            
-            // Stats on hash collisions
-            $unique_hashes = count($hash_map);
-            $single_files = 0;
-            foreach ($hash_map as $info) {
-                if (count($info['paths']) === 1) $single_files++;
-            }
-            
-            return [
-                'success' => true,
-                'scan_path' => $input_path,
-                'elapsed_ms' => $elapsed,
-                'hash_algorithm' => $hash_algo,
-                'summary' => [
-                    'total_files_scanned' => $total_files,
-                    'total_bytes_scanned' => $total_bytes,
-                    'unique_content_hashes' => $unique_hashes,
-                    'unique_files' => $single_files,
-                ],
-                'skipped' => [
-                    'hidden' => $skipped_hidden,
-                    'too_small' => $skipped_size,
-                    'errors' => $errored,
-                ],
-                'duplicates' => [
-                    'duplicate_groups' => $dup_groups,
-                    'total_duplicate_instances' => $dup_count,
-                    'total_wasted_bytes' => $dup_bytes,
-                    'total_wasted_human' => $dup_bytes >= 1073741824 ? round($dup_bytes / 1073741824, 2) . ' GB' : ($dup_bytes >= 1048576 ? round($dup_bytes / 1048576, 2) . ' MB' : ($dup_bytes >= 1024 ? round($dup_bytes / 1024, 1) . ' KB' : $dup_bytes . ' B')),
-                ],
-                'duplicate_groups' => array_slice($duplicates, 0, 20),
-            ];
-            
-        } catch (\Throwable $e) {
-            return ['error' => 'Duplicate scan failed: ' . $e->getMessage()];
-        }
+            usort($dups,fn($a,$b)=>$b['wasted']-$a['wasted']);
+            return['success'=>true,'scan_path'=>$input_path,'elapsed_ms'=>$el,'hash'=>$hash_algo,
+                'summary'=>['scanned'=>$tf,'bytes'=>$tb,'unique'=>count($hm)],
+                'skipped'=>['hidden'=>$sh,'too_small'=>$ss,'errors'=>$er],
+                'duplicates'=>['groups'=>$dg,'instances'=>$dc,'wasted'=>$db,'wasted_human'=>$db>=1073741824?round($db/1073741824,2).' GB':($db>=1048576?round($db/1048576,2).' MB':($db>=1024?round($db/1024,1).' KB':$db.' B'))],
+                'groups'=>array_slice($dups,0,20)];
+        }catch(\Throwable$e){return['error'=>'Scan failed: '.$e->getMessage()];}
     }
 }

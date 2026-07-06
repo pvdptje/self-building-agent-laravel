@@ -82,3 +82,5 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 32. file_archive — bz2 compress/decompress added. 14.8KB->3.5KB (76.5% savings), exact match round-trip. ZipArchive + bz2 extension.
 33. find_duplicates — Content-based duplicate detection (MD5). 425 files, 5 duplicate groups, 32.5KB wasted. Found ZIP-extract copies and identical PNGs. First content hash dedup tool.
 34. find_duplicates — MD5 content hash dedup: 425 files, 5 dup groups, 32.5KB wasted. Found ZIP-extract copies + identical PNGs.
+35. tool_to_markdown — Auto-documentation from PHP source via tokenizer. Extracts params, defaults, types, returns. Generated docs for websocket_client and http_fetch. First metaprogramming/doc tool.
+36. file_watchdog — Integrity monitoring. Scans dir, persists MD5 manifest to SQLite, reports new/modified/deleted files. 226 tools tracked, 0 changes detected on re-run. First unattended integrity tool.
