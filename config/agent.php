@@ -105,6 +105,14 @@ return [
             'allow_spawn_subagent' => true,
             'allow_shell_in_tools' => false,
         ],
+        'curator' => [
+            'allow_self_modify_system_prompt' => false,
+            'require_human_approval_for_prompt_switch' => true,
+            'allow_make_tool' => true,
+            'require_human_approval_for_new_tools' => true,
+            'allow_spawn_subagent' => true,
+            'allow_shell_in_tools' => false,
+        ],
         'madness' => [
             'allow_self_modify_system_prompt' => true,
             'require_human_approval_for_prompt_switch' => false,

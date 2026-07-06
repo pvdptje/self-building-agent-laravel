@@ -7,24 +7,206 @@ $toolDefinition_xml_generate = array (
   'function' => 
   array (
     'name' => 'xml_generate',
-    'description' => '[placeholder]',
+    'description' => 'Generate well-formed XML from a PHP array/object or JSON string. Converts structured data into XML with configurable root element, row element name, and attribute detection (keys starting with @). Supports nested arrays (recursive), numeric arrays (multiple child elements), CDATA sections for special characters, pretty-printing, and encoding declaration. Complements data_format_converter (which converts between JSON/CSV/XML) by providing direct array-to-XML generation. Never throws — all errors returned as structured data.',
     'parameters' => 
     array (
       'type' => 'object',
       'properties' => 
       array (
-        'test' => 
+        'data' => 
+        array (
+          'description' => 'Data to convert to XML. Can be a PHP array, stdClass object, or JSON string. Required.',
+        ),
+        'root' => 
         array (
           'type' => 'string',
+          'description' => 'Root element name (default: \'root\').',
         ),
+        'row' => 
+        array (
+          'type' => 'string',
+          'description' => 'Element name for array items (default: \'item\').',
+        ),
+        'encoding' => 
+        array (
+          'type' => 'string',
+          'description' => 'XML encoding (default: \'UTF-8\').',
+        ),
+        'pretty' => 
+        array (
+          'type' => 'boolean',
+          'description' => 'If true, pretty-print with indentation (default: true).',
+        ),
+        'cdata' => 
+        array (
+          'type' => 'boolean',
+          'description' => 'If true, wrap string values in CDATA sections (default: false).',
+        ),
+        'version' => 
+        array (
+          'type' => 'string',
+          'description' => 'XML version (default: \'1.0\').',
+        ),
+      ),
+      'required' => 
+      array (
+        0 => 'data',
       ),
     ),
   ),
 );
 
 if (! function_exists('xml_generate')) {
-    function xml_generate($test = null)
+    function xml_generate($data, $root = null, $row = null, $encoding = null, $pretty = null, $cdata = null, $version = null)
     {
-        return ['error' => 'do not use']; 
+        $data = $data ?? null;
+        $root = isset($root) ? (string)$root : 'root';
+        $row = isset($row) ? (string)$row : 'item';
+        $encoding = isset($encoding) ? (string)$encoding : 'UTF-8';
+        $pretty = $pretty ?? true;
+        $cdata = $cdata ?? false;
+        $version = isset($version) ? (string)$version : '1.0';
+
+        if ($data === null) {
+            return ['error' => 'data is required.', 'success' => false];
+        }
+
+        // Decode JSON string if needed
+        if (is_string($data)) {
+            $decoded = json_decode($data, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $data = $decoded;
+            }
+            // If not valid JSON, treat as a single string value
+        }
+
+        // Normalize to array
+        if (is_object($data)) {
+            $data = json_decode(json_encode($data), true);
+        }
+
+        if (!is_array($data)) {
+            // Wrap scalar in array
+            $data = ['value' => $data];
+        }
+
+        // Validate root element name
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_:-]*$/', $root)) {
+            return ['error' => "Invalid root element name: '{$root}'. Must start with letter or underscore.", 'success' => false];
+        }
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_:-]*$/', $row)) {
+            return ['error' => "Invalid row element name: '{$row}'.", 'success' => false];
+        }
+
+        // Check if data looks like a flat list (numeric keys)
+        $is_list = array_is_list($data);
+        $single_child = !$is_list && count($data) === 1 && isset($data['_']);
+
+        $xml = '<?xml version="' . $version . '" encoding="' . $encoding . '"?' . ">\n";
+
+        $indent = $pretty ? '  ' : '';
+
+        $toXml = function($value, $tagName, $depth = 0) use (&$toXml, $row, $pretty, $cdata, $indent) {
+            $i = $pretty ? str_repeat($indent, $depth) : '';
+            $nl = $pretty ? "\n" : '';
+            
+            if ($value === null || $value === '') {
+                return $i . '<' . $tagName . '/>' . $nl;
+            }
+            
+            if (is_bool($value)) {
+                $str = $value ? 'true' : 'false';
+            } elseif (is_array($value)) {
+                // Check for attributes (keys starting with @)
+                $attrs = '';
+                $content = null;
+                $children = [];
+                $has_numeric = false;
+                
+                foreach ($value as $k => $v) {
+                    if ((string)$k === '') continue;
+                    if ($k[0] === '@') {
+                        $attrs .= ' ' . substr($k, 1) . '="' . htmlspecialchars((string)$v, ENT_QUOTES | ENT_XML1) . '"';
+                    } elseif ($k === '_') {
+                        $content = $v;
+                    } else {
+                        $children[$k] = $v;
+                    }
+                    if (is_int($k)) $has_numeric = true;
+                }
+                
+                if ($content !== null && empty($children)) {
+                    // Simple element with text content and optional attributes
+                    $str = htmlspecialchars((string)$content, ENT_QUOTES | ENT_XML1);
+                    if ($cdata) $str = '<![CDATA[' . $content . ']]>';
+                    return $i . '<' . $tagName . $attrs . '>' . $str . '</' . $tagName . '>' . $nl;
+                }
+                
+                if (empty($children)) {
+                    return $i . '<' . $tagName . $attrs . '/>' . $nl;
+                }
+                
+                // Check if all children have numeric keys (it's a list)
+                $all_numeric = true;
+                foreach ($children as $k => $v) {
+                    if (!is_int($k)) { $all_numeric = false; break; }
+                }
+                
+                $result = $i . '<' . $tagName . $attrs . '>' . $nl;
+                
+                if ($content !== null) {
+                    $str = htmlspecialchars((string)$content, ENT_QUOTES | ENT_XML1);
+                    if ($cdata) $str = '<![CDATA[' . $content . ']]>';
+                    $result .= $i . $indent . $str . $nl;
+                }
+                
+                foreach ($children as $k => $v) {
+                    $childTag = is_int($k) ? $row : $k;
+                    if (is_array($v) && !empty($v)) {
+                        // Check if this sub-array is also a list
+                        $sub_all_numeric = true;
+                        foreach ($v as $sk => $sv) {
+                            if (!is_int($sk)) { $sub_all_numeric = false; break; }
+                        }
+                        if ($sub_all_numeric && count($v) > 0) {
+                            foreach ($v as $sv) {
+                                $result .= $toXml($sv, $childTag, $depth + 1);
+                            }
+                        } else {
+                            $result .= $toXml($v, $childTag, $depth + 1);
+                        }
+                    } else {
+                        $result .= $toXml($v, $childTag, $depth + 1);
+                    }
+                }
+                
+                $result .= $i . '</' . $tagName . '>' . $nl;
+                return $result;
+            } else {
+                $str = htmlspecialchars((string)$value, ENT_QUOTES | ENT_XML1);
+                if ($cdata) $str = '<![CDATA[' . (string)$value . ']]>';
+            }
+            
+            return $i . '<' . $tagName . '>' . $str . '</' . $tagName . '>' . $nl;
+        };
+
+        if ($is_list) {
+            $xml .= '<' . $root . '>' . $nl;
+            foreach ($data as $item) {
+                $xml .= $toXml($item, $row, 1);
+            }
+            $xml .= '</' . $root . '>' . $nl;
+        } else {
+            $xml .= $toXml($data, $root, 0);
+        }
+
+        return [
+            'success' => true,
+            'xml' => $xml,
+            'length' => strlen($xml),
+            'root' => $root,
+            'encoding' => $encoding,
+            'lists_as' => $row,
+        ];
     }
 }

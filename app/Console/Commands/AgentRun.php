@@ -16,7 +16,7 @@ class AgentRun extends Command
 {
     protected $signature = 'agent:run
         {task? : What the agent should work on}
-        {--mode= : Runtime mode (sane, supervised_weird, madness)}
+        {--mode= : Runtime mode (sane, supervised_weird, curator, madness)}
         {--prompt= : Starting system prompt id}
         {--iterations=8 : Maximum loop iterations}
         {--forever : Keep running until interrupted}';

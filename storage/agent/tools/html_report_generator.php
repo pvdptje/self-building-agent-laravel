@@ -7,24 +7,258 @@ $toolDefinition_html_report_generator = array (
   'function' => 
   array (
     'name' => 'html_report_generator',
-    'description' => '[placeholder - use markdown_table_export]',
+    'description' => 'Generate a styled HTML report page from structured data. Creates a complete, self-contained HTML document with CSS styling, data tables, charts (bar, pie, list), and metadata sections. Accepts data as a PHP array or JSON string. Support for: table view, bar chart (CSS-based horizontal bars), key-value lists, multi-section reports, and custom titles/colors. Complements markdown_to_html (converts MD→HTML) by creating HTML reports directly from data structures. Never throws — all errors returned as structured data.',
     'parameters' => 
     array (
       'type' => 'object',
       'properties' => 
       array (
-        'test' => 
+        'title' => 
         array (
           'type' => 'string',
+          'description' => 'Report title (default: \'Generated Report\').',
         ),
+        'sections' => 
+        array (
+          'type' => 'array',
+          'description' => 'Array of section objects. Each section has: type (\'table\'|\'chart\'|\'list\'|\'text\'), title (string), and data. For type=\'table\': data is array of objects (rows). For type=\'chart\': data is {labels:[], values:[], label:string}. For type=\'list\': data is {label:value} object. For type=\'text\': data is a string. Required.',
+        ),
+        'theme' => 
+        array (
+          'type' => 'string',
+          'description' => 'Color theme: \'light\', \'dark\', \'blue\', \'green\' (default: \'light\').',
+        ),
+        'filename' => 
+        array (
+          'type' => 'string',
+          'description' => 'Output filename (without path, .html added). Default: auto-generated.',
+        ),
+        'timestamp' => 
+        array (
+          'type' => 'boolean',
+          'description' => 'If true, include timestamp in the report header (default: true).',
+        ),
+      ),
+      'required' => 
+      array (
+        0 => 'title',
+        1 => 'sections',
       ),
     ),
   ),
 );
 
 if (! function_exists('html_report_generator')) {
-    function html_report_generator($test = null)
+    function html_report_generator($title, $sections, $theme = null, $filename = null, $timestamp = null)
     {
-        return ['error'=> 'placeholder only', 'note'=> 'Use markdown_table_export for SQL-to-Markdown export.']; 
+        $title = isset($title) ? (string)$title : 'Generated Report';
+        $sections = $sections ?? [];
+        $theme = isset($theme) ? (string)$theme : 'light';
+        $filename = isset($filename) ? (string)$filename : 'report_' . date('Ymd_His') . '.html';
+        $timestamp = $timestamp ?? true;
+
+        if (empty($sections) || !is_array($sections)) {
+            return ['error' => 'sections must be a non-empty array.', 'success' => false];
+        }
+
+        $valid_themes = ['light', 'dark', 'blue', 'green'];
+        if (!in_array($theme, $valid_themes)) {
+            $theme = 'light';
+        }
+
+        $theme_colors = [
+            'light' => ['bg' => '#ffffff', 'text' => '#333333', 'header' => '#f5f5f5', 'border' => '#dddddd', 'accent' => '#3498db', 'alt' => '#f9f9f9', 'heading' => '#2c3e50'],
+            'dark'  => ['bg' => '#1a1a2e', 'text' => '#e0e0e0', 'header' => '#16213e', 'border' => '#333355', 'accent' => '#4fc3f7', 'alt' => '#1e1e3a', 'heading' => '#ffffff'],
+            'blue'  => ['bg' => '#f0f8ff', 'text' => '#2c3e50', 'header' => '#e8f4fd', 'border' => '#b3d9f2', 'accent' => '#2980b9', 'alt' => '#eaf2f8', 'heading' => '#1a5276'],
+            'green' => ['bg' => '#f5fff5', 'text' => '#2d3e2d', 'header' => '#e8f5e9', 'border' => '#a5d6a7', 'accent' => '#27ae60', 'alt' => '#f0faf0', 'heading' => '#1b5e20'],
+        ];
+
+        $c = $theme_colors[$theme];
+
+        $html = '<!DOCTYPE html>
+        <html lang="en">
+        <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>' . htmlspecialchars($title) . '</title>
+        <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+               background: ' . $c['bg'] . '; color: ' . $c['text'] . '; line-height: 1.6; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { color: ' . $c['heading'] . '; border-bottom: 3px solid ' . $c['accent'] . ';
+             padding-bottom: 10px; margin-bottom: 20px; font-size: 1.8em; }
+        h2 { color: ' . $c['heading'] . '; margin: 25px 0 10px 0; font-size: 1.3em; }
+        .timestamp { color: #888; font-size: 0.85em; margin-bottom: 20px; }
+        .section { background: ' . $c['bg'] . '; border: 1px solid ' . $c['border'] . ';
+                    border-radius: 6px; padding: 15px; margin-bottom: 20px; }
+        .section-title { font-weight: 600; font-size: 1.1em; margin-bottom: 12px;
+                         color: ' . $c['accent'] . '; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        th { background: ' . $c['header'] . '; color: ' . $c['heading'] . ';
+             padding: 8px 10px; text-align: left; border: 1px solid ' . $c['border'] . ';
+             font-weight: 600; }
+        td { padding: 6px 10px; border: 1px solid ' . $c['border'] . '; }
+        tr:nth-child(even) { background: ' . $c['alt'] . '; }
+        tr:hover { background: rgba(52, 152, 219, 0.1); }
+        .chart-bar { display: flex; align-items: center; margin: 4px 0; }
+        .chart-label { width: 120px; text-align: right; padding-right: 10px;
+                       font-size: 0.85em; white-space: nowrap; overflow: hidden;
+                       text-overflow: ellipsis; }
+        .chart-value { width: 40px; text-align: right; padding-right: 8px;
+                       font-size: 0.85em; font-weight: 600; }
+        .chart-fill { height: 22px; background: ' . $c['accent'] . ';
+                      border-radius: 3px; min-width: 2px;
+                      transition: width 0.5s ease; }
+        .chart-container { width: 100%; }
+        .list-item { display: flex; padding: 4px 0; border-bottom: 1px solid ' . $c['border'] . '; }
+        .list-key { width: 40%; font-weight: 600; color: ' . $c['heading'] . ';
+                    padding-right: 10px; }
+        .list-value { width: 60%; color: ' . $c['text'] . '; word-break: break-all; }
+        .text-content { white-space: pre-wrap; line-height: 1.7; }
+        .footer { text-align: center; color: #999; font-size: 0.8em; margin-top: 30px;
+                  border-top: 1px solid ' . $c['border'] . '; padding-top: 10px; }
+        </style>
+        </head>
+        <body>
+        <div class="container">
+        <h1>' . htmlspecialchars($title) . '</h1>';
+
+        if ($timestamp) {
+            $html .= '<div class="timestamp">Generated: ' . date('Y-m-d H:i:s T') . '</div>';
+        }
+
+        $max_label_len = 0;
+
+        foreach ($sections as $sec_idx => $section) {
+            if (!is_array($section) || !isset($section['type'])) continue;
+            
+            $sec_type = $section['type'];
+            $sec_title = isset($section['title']) ? htmlspecialchars((string)$section['title']) : 'Section ' . ($sec_idx + 1);
+            $sec_data = $section['data'] ?? null;
+            
+            $html .= '<div class="section">';
+            $html .= '<div class="section-title">' . $sec_title . '</div>';
+            
+            switch ($sec_type) {
+                case 'table':
+                    if (empty($sec_data) || !is_array($sec_data)) {
+                        $html .= '<p>No data.</p>';
+                        break;
+                    }
+                    // Get columns from first row
+                    $columns = [];
+                    foreach ($sec_data as $row) {
+                        if (is_array($row) || is_object($row)) {
+                            foreach ($row as $k => $v) {
+                                $columns[$k] = true;
+                            }
+                        }
+                    }
+                    $columns = array_keys($columns);
+                    if (empty($columns)) {
+                        $html .= '<p>Empty data.</p>';
+                        break;
+                    }
+                    $html .= '<table><thead><tr>';
+                    foreach ($columns as $col) {
+                        $html .= '<th>' . htmlspecialchars((string)$col) . '</th>';
+                    }
+                    $html .= '</tr></thead><tbody>';
+                    foreach ($sec_data as $row) {
+                        $row = (array)$row;
+                        $html .= '<tr>';
+                        foreach ($columns as $col) {
+                            $val = isset($row[$col]) ? (string)$row[$col] : '';
+                            if (strlen($val) > 200) $val = substr($val, 0, 200) . '...';
+                            $html .= '<td>' . htmlspecialchars($val) . '</td>';
+                        }
+                        $html .= '</tr>';
+                    }
+                    $html .= '</tbody></table>';
+                    break;
+                    
+                case 'chart':
+                    if (!is_array($sec_data) || !isset($sec_data['labels']) || !isset($sec_data['values'])) {
+                        $html .= '<p>Chart data must have labels and values arrays.</p>';
+                        break;
+                    }
+                    $labels = $sec_data['labels'];
+                    $values = $sec_data['values'];
+                    if (empty($labels) || empty($values) || count($labels) !== count($values)) {
+                        $html .= '<p>Label/value mismatch or empty.</p>';
+                        break;
+                    }
+                    $max_val = max($values);
+                    $chart_label = isset($sec_data['label']) ? htmlspecialchars((string)$sec_data['label']) : 'Value';
+                    if ($max_val <= 0) $max_val = 1;
+                    
+                    $html .= '<div class="chart-container">';
+                    foreach ($labels as $i => $label) {
+                        $val = isset($values[$i]) ? (float)$values[$i] : 0;
+                        $pct = ($val / $max_val) * 100;
+                        $pct = max(1, min(100, $pct));
+                        $html .= '<div class="chart-bar">';
+                        $html .= '<div class="chart-label">' . htmlspecialchars((string)$label) . '</div>';
+                        $html .= '<div class="chart-value">' . number_format($val, 1) . '</div>';
+                        $html .= '<div class="chart-fill" style="width: ' . $pct . '%;"></div>';
+                        $html .= '</div>';
+                    }
+                    $html .= '</div>';
+                    break;
+                    
+                case 'list':
+                    if (empty($sec_data) || !is_array($sec_data)) {
+                        $html .= '<p>No data.</p>';
+                        break;
+                    }
+                    $html .= '<div>';
+                    foreach ($sec_data as $k => $v) {
+                        if (is_bool($v)) $v = $v ? 'true' : 'false';
+                        elseif ($v === null) $v = '(null)';
+                        elseif (is_array($v) || is_object($v)) $v = json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                        $html .= '<div class="list-item">';
+                        $html .= '<div class="list-key">' . htmlspecialchars((string)$k) . '</div>';
+                        $html .= '<div class="list-value">' . htmlspecialchars((string)$v) . '</div>';
+                        $html .= '</div>';
+                    }
+                    $html .= '</div>';
+                    break;
+                    
+                case 'text':
+                    $txt = is_string($sec_data) ? $sec_data : (is_array($sec_data) ? json_encode($sec_data, JSON_PRETTY_PRINT) : (string)$sec_data);
+                    $html .= '<div class="text-content">' . htmlspecialchars($txt) . '</div>';
+                    break;
+                    
+                default:
+                    $html .= '<p>Unknown section type: ' . htmlspecialchars($sec_type) . '</p>';
+            }
+            
+            $html .= '</div>';
+        }
+
+        $html .= '<div class="footer">Generated by PHP Agent Toolwork</div>';
+        $html .= '</div></body></html>';
+
+        // Write to workspace
+        $ws = realpath(__DIR__ . '/../../workspace');
+        if (!$ws) {
+            return ['error' => 'Workspace not found.', 'success' => false];
+        }
+
+        $out_path = $ws . '/' . $filename;
+        $written = file_put_contents($out_path, $html);
+        if ($written === false) {
+            return ['error' => 'Failed to write report file.', 'success' => false];
+        }
+
+        return [
+            'success' => true,
+            'filename' => $filename,
+            'path' => 'storage/agent/workspace/' . $filename,
+            'size_bytes' => strlen($html),
+            'sections' => count($sections),
+            'theme' => $theme,
+        ];
     }
 }
