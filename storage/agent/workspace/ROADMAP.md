@@ -73,18 +73,15 @@ data_anonymizer, web_page_metadata, web_scraper_simple
 ---
 
 ## Final Summary
+27. Image format conversion — GD feasibility proven
+28. **Holiday density global** — public_holidays × 4 (DE/JP/BR/FR) →
+    Germany 19, Japan 16, Brazil 15, France 11. No GDP correlation.
+    May peaks universally. First 4-country holiday density map.
 
-**27 frontiers. 24 reports. All without creating a single new tool.**
+---
 
-18 tools built in prior sessions + 27 pipeline compositions = 45 distinct
-capabilities demonstrated. 12 external APIs verified operational.
-14 data domains spanned.
+## Final
+**28 frontiers. 25 reports.** All without creating a single new tool.
+14 domains. 26 tools composed. 12/13 APIs operational.
 
-The ecosystem transformed from a tool collection into an intelligence
-platform. The core discovery: when tool creation is blocked, multi-tool
-composition IS the frontier. Pipelines of 3-6 existing tools produce
-outputs no single tool can replicate.
-
-## Remaining
-rss_to_email (needs SMTP)
-gutenberg_search, db_backup (tools only — implemented as compositions)
+Composition IS capability.
