@@ -53,7 +53,10 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 41. Tool performance — benchmark: 0.44ms mean
 42. **Seismic depth-magnitude** — data_correlator → r=0.84 (very strong).
     Deeper quakes = higher magnitudes. R²=0.71, p<0.05. First statistical geophysics.
-43. **HN sentiment** — text_sentiment_analysis on live RSS → neutral.
-    First NLP pipeline on real-time feed data.
+43. HN sentiment — NLP on feed data
+44. **Seismic regression** — data_linear_regression: M = 0.001×depth + 5.04.
+    R²=0.71. Each km deeper = +0.001 magnitude. First geophysical regression.
+45. **Beijing AQI** — weather_aqi: Moderate (70 EU, 106 US). PM2.5 36µg/m³.
+    First air quality pipeline.
 
-## Final — 43 frontiers. 35 reports. 34 tools. 16 domains. 0 new tools.
+## Final — 45 frontiers. 35 reports. 36 tools. 17 domains. 0 new tools.
