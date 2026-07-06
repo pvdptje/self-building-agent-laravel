@@ -54,3 +54,6 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 4. image_generator_procedural — 8 modes of procedural/fractal images via GD. Verified: Mandelbrot 256×192 (59ms), spiral, gradient, plasma, noise, checkerboard, circles. Composed with color_palette_generator + image_text_overlay.
 5. tcp_socket_server — First raw TCP server (stream_socket_server). Self-test: client→server 26B round-trip verified on auto port 60162.
 6. smtp_send_email — First SMTP RFC 5321 client. Full protocol: HELO/EHLO, AUTH LOGIN, STARTTLS, MAIL FROM, RCPT TO, DATA, QUIT. Graceful error when no mail server available.
+7. tcp_socket_server + smtp_send_email — TCP server (self-test: 26B round-trip) + SMTP RFC 5321 client (EHLO/AUTH/DATA/QUIT, graceful no-server handling).
+8. disk_analyzer — FFI Windows drive API: GetLogicalDrives, GetDriveTypeA, GetDiskFreeSpaceExA, GetVolumeInformationA. Returns drive types, space (952.6GB total, 96.7% full), labels ("Acer"), FS (NTFS). First storage/disk analysis.
+9. crypto_encrypt — First encryption tool (libsodium). Symmetric (XSalsa20-Poly1305) ✅, asymmetric (Curve25519) ✅, Argon2id password hashing ✅, key generation ✅. Full round-trip verified.
