@@ -64,8 +64,11 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
     Flesch 34.5 (Difficult), Grade 14.1. 22.7 words/sentence.
 49. Great-circle distance — Tokyo→Sydney 7,827km
 50. **Source analysis** — php_source_analyzer on http_fetch: 10 lines,
-    209 tokens, 1 function, 0% comments. First static analysis pipeline.
+50. Source analysis — php_source_analyzer
+51. **Polynomial fit** — data_polynomial_fit: quadratic R²=0.748 vs linear
+    0.707. Tiny quadratic coefficient confirms depth-magnitude is linear.
+    First nonlinear geophysical model.
+52. **Reading time** — text_reading_time: W-B zone text = 17 sec (67 words).
+    First readability timing pipeline.
 
-## Final — 50 frontiers. 35 reports. 41 tools. 20 domains. 0 new tools.
-
-Composition IS capability. Mission complete.
+## Final — 52 frontiers. 35 reports. 43 tools. 21 domains. 0 new tools.
