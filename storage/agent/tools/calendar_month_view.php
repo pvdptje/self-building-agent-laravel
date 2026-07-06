@@ -46,92 +46,73 @@ $toolDefinition_calendar_month_view = array (
 if (! function_exists('calendar_month_view')) {
     function calendar_month_view($year, $month, $highlight_today = null, $week_start = null)
     {
-        $month = (int)$month;
-        $year = (int)$year;
-        $weekStart = $week_start ?? 'sunday';
-        $highlight = $highlight_today ?? false;
+        // Generate ASCII calendar for a month using calendar extension
+        $year = isset($year) ? (int)$year : (int)date('Y');
+        $month = isset($month) ? max(1, min(12, (int)$month)) : (int)date('n');
+        $highlight = isset($highlight_today) ? (bool)$highlight_today : false;
+        $week_start = isset($week_start) ? (string)$week_start : 'sunday';
 
-        // Validate
-        if ($month < 1 || $month > 12) return json_encode(['error' => 'Month must be 1-12']);
-        if ($year < 1000 || $year > 9999) return json_encode(['error' => 'Year must be 1000-9999']);
+        // Use calendar extension if available
+        $days_in_month = extension_loaded('calendar')
+            ? cal_days_in_month(CAL_GREGORIAN, $month, $year)
+            : date('t', mktime(0,0,0,$month,1,$year));
 
-        $monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-                       'July', 'August', 'September', 'October', 'November', 'December'];
+        // First day of month (0=Sun, 1=Mon, ...)
+        $first_dow = (int)date('w', mktime(0,0,0,$month,1,$year));
 
-        // Get first day of month (0=Sunday, 1=Monday, ...)
-        $firstDay = (int)date('w', strtotime("{$year}-{$month}-01"));
-        // Get days in month
-        $daysInMonth = (int)date('t', strtotime("{$year}-{$month}-01"));
+        // Today
+        $today = (int)date('j');
+        $today_match = ($highlight && (int)date('Y') === $year && (int)date('n') === $month);
 
-        // Adjust for Monday-start
-        $weekdayOffset = ($weekStart === 'monday') ? ($firstDay === 0 ? 6 : $firstDay - 1) : $firstDay;
-
-        $headerDays = ($weekStart === 'monday')
-            ? ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
-            : ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-        // Today's date for highlighting
-        $today = $highlight ? (int)date('j') : 0;
-        $todayMonth = $highlight ? (int)date('n') : 0;
-        $todayYear = $highlight ? (int)date('Y') : 0;
-        $isToday = function($d) use ($today, $todayMonth, $todayYear, $month, $year) {
-            return $d === $today && $month === $todayMonth && $year === $todayYear;
-        };
-
-        // Build the calendar grid
-        $calendarLines = [];
-        $title = "{$monthNames[$month]} {$year}";
-        $calendarLines[] = $title;
-        $calendarLines[] = str_repeat('─', 27);
-        $calendarLines[] = ' ' . implode(' ', $headerDays) . ' ';
-
-        // Position first day
-        $weekStr = '';
-        for ($i = 0; $i < $weekdayOffset; $i++) {
-            $weekStr .= '   ';
+        // Day names
+        $day_names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        if ($week_start === 'monday') {
+            // Rotate so Monday is first
+            $sun = array_shift($day_names);
+            $day_names[] = $sun;
+            $first_dow = ($first_dow + 6) % 7;
         }
 
-        // Fill days
-        for ($d = 1; $d <= $daysInMonth; $d++) {
-            if ($isToday($d)) {
-                $weekStr .= '[' . str_pad($d, 2, ' ', STR_PAD_LEFT) . ']';
-            } else {
-                $weekStr .= ' ' . str_pad($d, 2, ' ', STR_PAD_LEFT) . ' ';
+        // Build calendar
+        $result = "  {$year}-" . str_pad($month, 2, '0', STR_PAD_LEFT) . "\n";
+        $result .= "┌─────────────────────────┐\n";
+        $result .= "│ " . implode(' ', $day_names) . " │\n";
+        $result .= "├─────────────────────────┤\n";
+
+        $calendar = '';
+        $day = 1;
+        // Fill first week
+        $calendar .= '│';
+        for ($i = 0; $i < $first_dow; $i++) $calendar .= '   ';
+        for ($i = $first_dow; $i < 7 && $day <= $days_in_month; $i++) {
+            $is_today = $today_match && $day === $today;
+            $calendar .= ($is_today ? '[' : ' ') . str_pad($day, 2, ' ', STR_PAD_LEFT) . ($is_today ? ']' : ' ');
+            $day++;
+        }
+        $calendar .= "│\n";
+
+        // Remaining weeks
+        while ($day <= $days_in_month) {
+            $calendar .= '│';
+            for ($i = 0; $i < 7 && $day <= $days_in_month; $i++) {
+                $is_today = $today_match && $day === $today;
+                if ($is_today) {
+                    $calendar .= '[' . str_pad($day, 2, ' ', STR_PAD_LEFT) . ']';
+                } else {
+                    $calendar .= ' ' . str_pad($day, 2, ' ', STR_PAD_LEFT) . ' ';
+                }
+                $day++;
             }
-
-            $dayOfWeek = ($weekdayOffset + $d - 1) % 7;
-            if ($dayOfWeek === 6 || $d === $daysInMonth) {
-                $calendarLines[] = $weekStr;
-                $weekStr = '';
+            // Fill in remaining cells in last week
+            if ($day > $days_in_month) {
+                for ($j = $i; $j < 7; $j++) $calendar .= '   ';
             }
+            $calendar .= "│\n";
         }
 
-        // Build a framed calendar using box-drawing characters
-        $maxLineLen = 0;
-        foreach ($calendarLines as $line) {
-            $len = strlen($line);
-            if ($len > $maxLineLen) $maxLineLen = $len;
-        }
+        $result .= $calendar;
+        $result .= "└─────────────────────────┘\n";
 
-        $frameWidth = max($maxLineLen + 4, 32);
-
-        $topBorder = '╔' . str_repeat('═', $frameWidth - 2) . '╗';
-        $bottomBorder = '╚' . str_repeat('═', $frameWidth - 2) . '╝';
-
-        $output = $topBorder . "\n";
-        foreach ($calendarLines as $line) {
-            $padded = str_pad($line, $frameWidth - 2, ' ', STR_PAD_BOTH);
-            $output .= '║ ' . $padded . ' ║' . "\n";
-        }
-        $output .= $bottomBorder;
-
-        return json_encode([
-            'year' => $year,
-            'month' => $month,
-            'month_name' => $monthNames[$month],
-            'days_in_month' => $daysInMonth,
-            'first_weekday' => $headerDays[$weekdayOffset],
-            'calendar_ascii' => $output,
-        ]);
+        return ['success' => true, 'year' => $year, 'month' => $month, 'days' => $days_in_month, 'calendar' => $result];
     }
 }

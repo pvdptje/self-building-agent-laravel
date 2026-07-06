@@ -87,3 +87,4 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 37. file_watchdog — SQLite-persisted integrity monitor. 226 files tracked, MD5 hashed, 0 changes. Reports new/modified/deleted across calls.
 38. tool_to_markdown + file_watchdog + find_duplicates — Auto-doc generation, integrity monitoring (226 files, 0 changes), content dedup (5 groups, 32.5KB).
 39. file_watchdog — 226 files tracked, MD5 hashed, 0 changes. SQLite-persisted integrity monitor across tool calls.
+40. Restored websocket_client (live Binance BTC verified), batch_image_process (7 GD ops), weather_aqi (AQI API). calendar extension probed (Gregorian/Julian/Jewish/Easter).
