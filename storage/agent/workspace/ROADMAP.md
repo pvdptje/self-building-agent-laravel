@@ -57,3 +57,5 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 7. tcp_socket_server + smtp_send_email — TCP server (self-test: 26B round-trip) + SMTP RFC 5321 client (EHLO/AUTH/DATA/QUIT, graceful no-server handling).
 8. disk_analyzer — FFI Windows drive API: GetLogicalDrives, GetDriveTypeA, GetDiskFreeSpaceExA, GetVolumeInformationA. Returns drive types, space (952.6GB total, 96.7% full), labels ("Acer"), FS (NTFS). First storage/disk analysis.
 9. crypto_encrypt — First encryption tool (libsodium). Symmetric (XSalsa20-Poly1305) ✅, asymmetric (Curve25519) ✅, Argon2id password hashing ✅, key generation ✅. Full round-trip verified.
+10. disk_analyzer + crypto_encrypt — FFI drive enumeration (C: 952.6GB, 96.7% full, NTFS "Acer") + full encryption suite (symmetric XSalsa20-Poly1305 ✅, asymmetric Curve25519 ✅, Argon2id ✅).
+11. process_scanner — FFI Windows Tool Help API (CreateToolhelp32Snapshot + Process32First/NextW). 142 processes found. PID 0 (System Process), PID 4 (System, 396 threads). Filter by name/pid/threads. First process enumeration.
