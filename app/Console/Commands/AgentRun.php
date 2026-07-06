@@ -72,6 +72,7 @@ class AgentRun extends Command
                 'history_compress_chars' => $config['history_compress_chars'],
                 'max_tool_result_chars' => $config['max_tool_result_chars'],
                 'max_subagents_per_run' => $config['max_subagents_per_run'],
+                'max_generated_tools_per_request' => $config['max_generated_tools_per_request'],
             ],
             approve: fn (string $question) => $this->confirm($question),
             output: function (string $type, string $message) {

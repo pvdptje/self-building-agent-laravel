@@ -29,9 +29,39 @@ class SchemaNormalizer
             return ['type' => 'object', 'properties' => new stdClass];
         }
 
+        $parameters = self::hoistMisplacedRequired($parameters);
         $parameters = self::walk($parameters);
         $parameters['type'] ??= 'object';
         $parameters['properties'] ??= new stdClass;
+
+        return $parameters;
+    }
+
+    /**
+     * Some early generated tools accidentally wrote the top-level `required`
+     * array inside `properties`, which makes APIs interpret it as a normal
+     * argument named "required". Repair that legacy shape while loading.
+     *
+     * @param array<string, mixed> $parameters
+     * @return array<string, mixed>
+     */
+    private static function hoistMisplacedRequired(array $parameters): array
+    {
+        if (! is_array($parameters['properties'] ?? null)) {
+            return $parameters;
+        }
+
+        $misplaced = $parameters['properties']['required'] ?? null;
+
+        if (! is_array($misplaced) || ! array_is_list($misplaced)) {
+            return $parameters;
+        }
+
+        if (! isset($parameters['required']) || $parameters['required'] === []) {
+            $parameters['required'] = array_values(array_filter($misplaced, 'is_string'));
+        }
+
+        unset($parameters['properties']['required']);
 
         return $parameters;
     }

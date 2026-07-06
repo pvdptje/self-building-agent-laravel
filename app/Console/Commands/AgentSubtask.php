@@ -52,7 +52,10 @@ class AgentSubtask extends Command
                 ),
                 registry: $registry,
                 prompts: new PromptRepository($config['prompts_path']),
-                limits: ['max_tool_result_chars' => $config['max_tool_result_chars']],
+                limits: [
+                    'max_tool_result_chars' => $config['max_tool_result_chars'],
+                    'max_generated_tools_per_request' => $config['subagent_max_generated_tools_per_request'],
+                ],
             );
 
             $answer = $subagent->run(

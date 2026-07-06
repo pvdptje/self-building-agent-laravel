@@ -201,6 +201,66 @@ PHP);
         ->and($json)->not->toContain('"items":[]');
 });
 
+it('hoists misplaced required arrays from legacy tool properties', function () {
+    $name = 'legacy_required_'.uniqid();
+
+    file_put_contents($this->dir.'/'.$name.'.php', <<<PHP
+<?php
+
+\$toolDefinition_{$name} = [
+    'type' => 'function',
+    'function' => [
+        'name' => '{$name}',
+        'description' => 'Legacy tool with misplaced required metadata.',
+        'parameters' => [
+            'type' => 'object',
+            'properties' => [
+                'numbers' => ['type' => 'array', 'items' => ['type' => 'number']],
+                'required' => ['numbers'],
+            ],
+        ],
+    ],
+];
+
+if (! function_exists('{$name}')) {
+    function {$name}(\$numbers = null)
+    {
+        return \$numbers;
+    }
+}
+PHP);
+
+    $registry = new ToolRegistry($this->dir);
+    $registry->refreshGenerated();
+
+    $json = json_encode(collect($registry->allDefinitions())->firstWhere('function.name', $name));
+
+    expect($json)->toContain('"required":["numbers"]')
+        ->and($json)->not->toContain('"required":{"type"')
+        ->and($json)->not->toContain('"properties":{"numbers":{"type":"array","items":{"type":"number"}},"required"');
+});
+
+it('caps generated tool definitions while preserving focused tools', function () {
+    foreach (['old_alpha', 'old_beta', 'old_gamma'] as $name) {
+        $this->maker->make($name.'_'.uniqid(), 'Temporary filler.', [], 'return 1;');
+        usleep(1000);
+    }
+
+    $focused = 'focused_tool_'.uniqid();
+    $this->maker->make($focused, 'The tool explicitly mentioned in recent history.', [], 'return "focused";');
+
+    $registry = new ToolRegistry($this->dir);
+    $registry->refreshGenerated();
+
+    $names = array_map(
+        fn (array $definition) => $definition['function']['name'],
+        $registry->allDefinitions(maxGeneratedTools: 1, focusNames: [$focused]),
+    );
+
+    expect($names)->toContain($focused)
+        ->and(array_filter($names, fn (string $name) => str_starts_with($name, 'focused_tool_') || str_starts_with($name, 'old_')))->toHaveCount(1);
+});
+
 it('turns a tool that exhausts memory into an error result instead of dying', function () {
     $name = 'memory_hog_'.uniqid();
 

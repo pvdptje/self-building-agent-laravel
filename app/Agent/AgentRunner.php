@@ -28,7 +28,7 @@ class AgentRunner
 
     /**
      * @param array{allow_self_modify_system_prompt: bool, require_human_approval_for_prompt_switch: bool, allow_make_tool: bool, require_human_approval_for_new_tools: bool, allow_spawn_subagent?: bool} $modeConfig
-     * @param array{max_prompt_switches_per_run: int, max_tools_created_per_run: int, autonomous_continue_message?: string, history_compress_chars?: ?int, max_tool_result_chars?: int, max_subagents_per_run?: int} $limits
+     * @param array{max_prompt_switches_per_run: int, max_tools_created_per_run: int, autonomous_continue_message?: string, history_compress_chars?: ?int, max_tool_result_chars?: int, max_subagents_per_run?: int, max_generated_tools_per_request?: int} $limits
      * @param Closure(string): bool $approve Ask the human a yes/no question.
      * @param Closure(string, string): void $output Report progress to the human as (type, message). Types: iteration, thought, tool_call, tool_result, proposal, switch, system.
      * @param Closure(string): array{answer?: string, error?: string}|null $spawnSubagent Run a subtask in a separate process and return its answer.
@@ -100,7 +100,12 @@ class AgentRunner
 
             ($this->output)('iteration', "Iteration {$this->iteration} · prompt: {$this->activePromptId} · provider: {$this->llm->activeProvider()} · tools created: {$this->toolsCreated}");
 
-            $tools = $this->registry->allDefinitions($this->modeConfig['allow_make_tool'], $this->subagentsEnabled());
+            $tools = $this->registry->allDefinitions(
+                $this->modeConfig['allow_make_tool'],
+                $this->subagentsEnabled(),
+                $this->limits['max_generated_tools_per_request'] ?? null,
+                $this->toolFocusNames($messages),
+            );
 
             try {
                 $assistant = $this->llm->chat($messages, $tools);
@@ -357,6 +362,8 @@ class AgentRunner
                 'read_prompt_resource' => $this->prompts->find((string) ($arguments['id'] ?? ''))
                     ?? ['error' => 'No prompt with that id.'],
                 'search_prompt_resources' => $this->prompts->search((string) ($arguments['query'] ?? '')),
+                'list_generated_tools' => $this->handleListGeneratedTools($arguments),
+                'search_generated_tools' => $this->handleSearchGeneratedTools($arguments),
                 'suggest_system_prompt' => $this->handleSuggestSystemPrompt($arguments),
                 'make_tool' => $this->handleMakeTool($arguments),
                 'spawn_subagent' => $this->handleSpawnSubagent($arguments),
@@ -367,6 +374,67 @@ class AgentRunner
         } catch (\Throwable $e) {
             return ['error' => "Tool [{$name}] threw: {$e->getMessage()}"];
         }
+    }
+
+    /**
+     * Find generated tool names that appear in recent conversation text. This
+     * lets catalog search results pin matching executable schemas into the
+     * next request without shipping every generated tool on every turn.
+     *
+     * @param array<int, array<string, mixed>> $messages
+     * @return array<int, string>
+     */
+    private function toolFocusNames(array $messages): array
+    {
+        $haystackParts = [];
+
+        foreach (array_slice($messages, -12) as $message) {
+            $haystackParts[] = is_string($message['content'] ?? null) ? $message['content'] : json_encode($message, JSON_UNESCAPED_SLASHES);
+        }
+
+        $haystack = implode("\n", array_filter($haystackParts));
+        $focus = [];
+
+        foreach ($this->registry->generatedNames() as $name) {
+            if (str_contains($haystack, $name)) {
+                $focus[] = $name;
+            }
+        }
+
+        return $focus;
+    }
+
+    /**
+     * @param array<string, mixed> $arguments
+     */
+    private function handleListGeneratedTools(array $arguments): array
+    {
+        $limit = max(1, min(200, (int) ($arguments['limit'] ?? 80)));
+
+        return [
+            'total' => count($this->registry->generatedNames()),
+            'tools' => $this->registry->generatedCatalog($limit),
+            'note' => 'Use search_generated_tools for focused discovery. Mentioned tool names are made callable on the next request.',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $arguments
+     */
+    private function handleSearchGeneratedTools(array $arguments): array
+    {
+        $query = trim((string) ($arguments['query'] ?? ''));
+        $limit = max(1, min(50, (int) ($arguments['limit'] ?? 20)));
+
+        if ($query === '') {
+            return ['error' => 'search_generated_tools requires a non-empty query.'];
+        }
+
+        return [
+            'query' => $query,
+            'matches' => $this->registry->searchGenerated($query, $limit),
+            'note' => 'These matching tool names are now in recent history, so the host will prioritize making them callable on the next request.',
+        ];
     }
 
     /**

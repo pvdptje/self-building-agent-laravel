@@ -43,12 +43,14 @@ return [
         ? null
         : (int) env('AGENT_HISTORY_COMPRESS_CHARS'),
     'max_tool_result_chars' => (int) env('AGENT_MAX_TOOL_RESULT_CHARS', 50_000),
+    'max_generated_tools_per_request' => (int) env('AGENT_MAX_GENERATED_TOOLS_PER_REQUEST', 60),
 
     // Subagents. The agent can delegate a focused subtask to a fresh subagent
     // that runs in a separate process with its own context, and only its final
     // answer returns — so heavy reading/analysis never fills the parent's
     // history. This is the main relief valve for context compression.
     'max_subagents_per_run' => 40,
+    'subagent_max_generated_tools_per_request' => (int) env('AGENT_SUBAGENT_MAX_GENERATED_TOOLS_PER_REQUEST', 40),
     'subagent_prompt' => 'worker',
     'subagent_iterations' => 6,
     'subagent_timeout_seconds' => 150,

@@ -11,6 +11,9 @@ class ToolRegistry
     /** @var array<string, array> Generated tool definitions, keyed by tool name. */
     private array $generated = [];
 
+    /** @var array<string, int> Generated tool mtimes, keyed by tool name. */
+    private array $generatedMtimes = [];
+
     public function __construct(
         private string $generatedToolsPath,
         private string $toolMemoryLimit = '64M',
@@ -66,6 +69,34 @@ class ToolRegistry
                         'type' => 'object',
                         'properties' => [
                             'query' => ['type' => 'string', 'description' => 'Case-insensitive search term.'],
+                        ],
+                        'required' => ['query'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'list_generated_tools',
+                    'description' => 'List the generated tool catalog without loading every tool schema into the model context. Use this when you need to discover available tools.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'limit' => ['type' => 'integer', 'description' => 'Maximum tools to return, 1-200. Defaults to 80.'],
+                        ],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'search_generated_tools',
+                    'description' => 'Search generated tools by name and description. Matching tools are prioritized in the next request so you can call them.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'query' => ['type' => 'string', 'description' => 'Words to match against generated tool names and descriptions.'],
+                            'limit' => ['type' => 'integer', 'description' => 'Maximum matches to return, 1-50. Defaults to 20.'],
                         ],
                         'required' => ['query'],
                     ],
@@ -147,6 +178,7 @@ class ToolRegistry
     public function refreshGenerated(): void
     {
         $this->generated = [];
+        $this->generatedMtimes = [];
 
         foreach (glob($this->generatedToolsPath.'/*.php') ?: [] as $file) {
             $definition = $this->loadDefinitionFromFile($file);
@@ -165,6 +197,7 @@ class ToolRegistry
 
             if (! in_array($name, $this->builtInNames(), true)) {
                 $this->generated[$name] = $definition;
+                $this->generatedMtimes[$name] = filemtime($file) ?: 0;
             }
         }
     }
@@ -172,9 +205,17 @@ class ToolRegistry
     /**
      * @return array<int, array>
      */
-    public function allDefinitions(bool $includeMakeTool = true, bool $includeSubagent = true): array
+    public function allDefinitions(
+        bool $includeMakeTool = true,
+        bool $includeSubagent = true,
+        ?int $maxGeneratedTools = null,
+        array $focusNames = [],
+    ): array
     {
-        return array_merge($this->builtInDefinitions($includeMakeTool, $includeSubagent), array_values($this->generated));
+        return array_merge(
+            $this->builtInDefinitions($includeMakeTool, $includeSubagent),
+            array_values($this->selectedGeneratedDefinitions($maxGeneratedTools, $focusNames)),
+        );
     }
 
     /**
@@ -184,12 +225,65 @@ class ToolRegistry
      *
      * @return array<int, array>
      */
-    public function subagentDefinitions(): array
+    public function subagentDefinitions(?int $maxGeneratedTools = null, array $focusNames = []): array
     {
         return array_merge(
             $this->builtInDefinitions(includeMakeTool: false, includeSubagent: false, includeAgentControl: false),
-            array_values($this->generated),
+            array_values($this->selectedGeneratedDefinitions($maxGeneratedTools, $focusNames)),
         );
+    }
+
+    /**
+     * @return array<int, array{name: string, description: string, modified_at: int}>
+     */
+    public function generatedCatalog(?int $limit = null): array
+    {
+        $entries = [];
+
+        foreach ($this->generated as $name => $definition) {
+            $entries[] = [
+                'name' => $name,
+                'description' => (string) ($definition['function']['description'] ?? ''),
+                'modified_at' => $this->generatedMtimes[$name] ?? 0,
+            ];
+        }
+
+        usort($entries, fn (array $a, array $b) => [$b['modified_at'], $a['name']] <=> [$a['modified_at'], $b['name']]);
+
+        return $limit === null ? $entries : array_slice($entries, 0, max(0, $limit));
+    }
+
+    /**
+     * @return array<int, array{name: string, description: string, score: int}>
+     */
+    public function searchGenerated(string $query, int $limit = 20): array
+    {
+        $terms = array_values(array_filter(preg_split('/\s+/', mb_strtolower($query)) ?: []));
+        $matches = [];
+
+        foreach ($this->generated as $name => $definition) {
+            $description = (string) ($definition['function']['description'] ?? '');
+            $haystack = mb_strtolower($name.' '.$description);
+            $score = 0;
+
+            foreach ($terms as $term) {
+                if ($term !== '' && str_contains($haystack, $term)) {
+                    $score += str_contains(mb_strtolower($name), $term) ? 3 : 1;
+                }
+            }
+
+            if ($score > 0 || $terms === []) {
+                $matches[] = [
+                    'name' => $name,
+                    'description' => $description,
+                    'score' => $score,
+                ];
+            }
+        }
+
+        usort($matches, fn (array $a, array $b) => [$b['score'], $a['name']] <=> [$a['score'], $b['name']]);
+
+        return array_slice($matches, 0, max(0, $limit));
     }
 
     public function isGenerated(string $name): bool
@@ -200,6 +294,46 @@ class ToolRegistry
     public function generatedToolExists(string $name): bool
     {
         return is_file($this->generatedToolsPath.'/'.$name.'.php');
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function generatedNames(): array
+    {
+        return array_keys($this->generated);
+    }
+
+    /**
+     * @param array<int, string> $focusNames
+     * @return array<string, array>
+     */
+    private function selectedGeneratedDefinitions(?int $maxGeneratedTools, array $focusNames): array
+    {
+        if ($maxGeneratedTools === null || $maxGeneratedTools <= 0 || count($this->generated) <= $maxGeneratedTools) {
+            return $this->generated;
+        }
+
+        $selected = [];
+
+        foreach ($focusNames as $name) {
+            if (isset($this->generated[$name])) {
+                $selected[$name] = $this->generated[$name];
+            }
+        }
+
+        $remaining = array_diff_key($this->generated, $selected);
+        uksort($remaining, fn (string $a, string $b) => [$this->generatedMtimes[$b] ?? 0, $a] <=> [$this->generatedMtimes[$a] ?? 0, $b]);
+
+        foreach ($remaining as $name => $definition) {
+            if (count($selected) >= $maxGeneratedTools) {
+                break;
+            }
+
+            $selected[$name] = $definition;
+        }
+
+        return $selected;
     }
 
     /**

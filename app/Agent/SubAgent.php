@@ -14,7 +14,7 @@ class SubAgent
     private const DEFAULT_PROMPT = 'You are a focused subagent. Complete the given task using your tools, then reply with a concise, complete answer and no tool calls.';
 
     /**
-     * @param array{max_tool_result_chars?: int} $limits
+     * @param array{max_tool_result_chars?: int, max_generated_tools_per_request?: int} $limits
      */
     public function __construct(
         private LlmClient $llm,
@@ -38,7 +38,13 @@ class SubAgent
         for ($i = 1; $i <= $maxIterations; $i++) {
             $this->registry->refreshGenerated();
 
-            $assistant = $this->llm->chat($messages, $this->registry->subagentDefinitions());
+            $assistant = $this->llm->chat(
+                $messages,
+                $this->registry->subagentDefinitions(
+                    $this->limits['max_generated_tools_per_request'] ?? null,
+                    $this->toolFocusNames($messages),
+                ),
+            );
             $messages[] = $assistant;
 
             $content = trim((string) ($assistant['content'] ?? ''));
@@ -88,6 +94,8 @@ class SubAgent
                 'read_prompt_resource' => $this->prompts->find((string) ($arguments['id'] ?? ''))
                     ?? ['error' => 'No prompt with that id.'],
                 'search_prompt_resources' => $this->prompts->search((string) ($arguments['query'] ?? '')),
+                'list_generated_tools' => $this->handleListGeneratedTools($arguments),
+                'search_generated_tools' => $this->handleSearchGeneratedTools($arguments),
                 default => $this->registry->isGenerated($name)
                     ? $this->registry->executeGenerated($name, $arguments)
                     : ['error' => "Subagents cannot use tool [{$name}]."],
@@ -95,5 +103,60 @@ class SubAgent
         } catch (\Throwable $e) {
             return ['error' => "Tool [{$name}] threw: {$e->getMessage()}"];
         }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $messages
+     * @return array<int, string>
+     */
+    private function toolFocusNames(array $messages): array
+    {
+        $haystackParts = [];
+
+        foreach (array_slice($messages, -12) as $message) {
+            $haystackParts[] = is_string($message['content'] ?? null) ? $message['content'] : json_encode($message, JSON_UNESCAPED_SLASHES);
+        }
+
+        $haystack = implode("\n", array_filter($haystackParts));
+        $focus = [];
+
+        foreach ($this->registry->generatedNames() as $name) {
+            if (str_contains($haystack, $name)) {
+                $focus[] = $name;
+            }
+        }
+
+        return $focus;
+    }
+
+    /**
+     * @param array<string, mixed> $arguments
+     */
+    private function handleListGeneratedTools(array $arguments): array
+    {
+        $limit = max(1, min(200, (int) ($arguments['limit'] ?? 80)));
+
+        return [
+            'total' => count($this->registry->generatedNames()),
+            'tools' => $this->registry->generatedCatalog($limit),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $arguments
+     */
+    private function handleSearchGeneratedTools(array $arguments): array
+    {
+        $query = trim((string) ($arguments['query'] ?? ''));
+        $limit = max(1, min(50, (int) ($arguments['limit'] ?? 20)));
+
+        if ($query === '') {
+            return ['error' => 'search_generated_tools requires a non-empty query.'];
+        }
+
+        return [
+            'query' => $query,
+            'matches' => $this->registry->searchGenerated($query, $limit),
+        ];
     }
 }

@@ -48,92 +48,46 @@ $toolDefinition_data_normalizer = array (
 if (! function_exists('data_normalizer')) {
     function data_normalizer($numbers, $method = null, $feature_range = null)
     {
-        $nums = $numbers;
-        if (empty($nums)) {
-            return json_encode(['error' => 'Empty array', 'original' => [], 'normalized' => []]);
+        // Normalize numeric arrays
+        $nums=isset($numbers)?(array)$numbers:[];
+        $method=isset($method)?(string)$method:'minmax';
+        $range=isset($feature_range)?(array)$feature_range:[0,1];
+        if(count($nums)===0)return['error'=>'Numbers array required'];
+
+        $n=array_map('floatval',$nums);
+        $min_val=min($n);$max_val=max($n);
+        $count=count($n);
+        $mean=array_sum($n)/$count;
+        $variance=array_sum(array_map(fn($x)=>($x-$mean)**2,$n))/$count;
+        $std=sqrt($variance);
+
+        $result=[];
+        foreach($n as$v){
+            switch($method){
+                case'minmax':
+                    if($max_val-$min_val===0)$r=$range[0];
+                    else $r=max($range[0],min($range[1],$range[0]+($v-$min_val)/($max_val-$min_val)*($range[1]-$range[0])));
+                    break;
+                case'zscore':
+                    $r=$std>0?($v-$mean)/$std:0;
+                    break;
+                case'log':
+                    $r=$v>0?log($v):0;
+                    break;
+                case'rank':
+                    $sorted=$n;sort($sorted);
+                    $idx=array_search($v,$sorted);
+                    $r=$count>1?$idx/($count-1):0.5;
+                    break;
+                default:$r=$v;
+            }
+            $result[]=round($r,6);
         }
-        $method = isset($method) ? $method : 'minmax';
-        $count = count($nums);
-        $original = $nums;
 
-        switch ($method) {
-            case 'minmax':
-                $minR = isset($feature_range) && count($feature_range) >= 2 ? (float)$feature_range[0] : 0.0;
-                $maxR = isset($feature_range) && count($feature_range) >= 2 ? (float)$feature_range[1] : 1.0;
-                $min = min($nums);
-                $max = max($nums);
-                if ($max === $min) {
-                    $normalized = array_fill(0, $count, ($minR + $maxR) / 2);
-                } else {
-                    $normalized = array_map(function($v) use ($min, $max, $minR, $maxR) {
-                        return round($minR + ($v - $min) / ($max - $min) * ($maxR - $minR), 6);
-                    }, $nums);
-                }
-                return json_encode([
-                    'method' => 'minmax',
-                    'range' => [$minR, $maxR],
-                    'original_min' => $min,
-                    'original_max' => $max,
-                    'original' => $original,
-                    'normalized' => $normalized,
-                ]);
-
-            case 'zscore':
-                $mean = array_sum($nums) / $count;
-                $variance = 0;
-                foreach ($nums as $v) { $variance += pow($v - $mean, 2); }
-                $std = sqrt($variance / $count);
-                if ($std === 0.0) {
-                    $normalized = array_fill(0, $count, 0.0);
-                } else {
-                    $normalized = array_map(function($v) use ($mean, $std) {
-                        return round(($v - $mean) / $std, 6);
-                    }, $nums);
-                }
-                return json_encode([
-                    'method' => 'zscore',
-                    'mean' => round($mean, 6),
-                    'std_dev' => round($std, 6),
-                    'original' => $original,
-                    'normalized' => $normalized,
-                ]);
-
-            case 'log':
-                $normalized = array_map(function($v) {
-                    return $v > 0 ? round(log($v), 6) : 0;
-                }, $nums);
-                return json_encode([
-                    'method' => 'log',
-                    'original' => $original,
-                    'normalized' => $normalized,
-                ]);
-
-            case 'rank':
-                $sorted = $nums;
-                sort($sorted);
-                $rankMap = [];
-                foreach ($sorted as $i => $v) {
-                    $rankMap[] = ['value' => $v, 'rank' => ($count > 1) ? $i / ($count - 1) : 0.5];
-                }
-                // Map back to original order
-                $indexed = [];
-                foreach ($nums as $i => $v) {
-                    $indexed[] = ['idx' => $i, 'val' => $v];
-                }
-                usort($indexed, function($a, $b) { return $a['val'] <=> $b['val']; });
-                foreach ($indexed as $i => $entry) {
-                    $indexed[$i]['pct'] = ($count > 1) ? $i / ($count - 1) : 0.5;
-                }
-                usort($indexed, function($a, $b) { return $a['idx'] <=> $b['idx']; });
-                $normalized = array_map(function($e) { return round($e['pct'], 6); }, $indexed);
-                return json_encode([
-                    'method' => 'rank',
-                    'original' => $original,
-                    'normalized' => $normalized,
-                ]);
-
-            default:
-                return json_encode(['error' => "Unknown method: $method"]);
-        }
+        return[
+            'success'=>true,'method'=>$method,'input_count'=>$count,
+            'original'=>['min'=>$min_val,'max'=>$max_val,'mean'=>round($mean,4),'std'=>round($std,4)],
+            'normalized'=>$result,
+        ];
     }
 }
