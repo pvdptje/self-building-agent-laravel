@@ -74,3 +74,5 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 24. intl_format — i18n formatter (ICU 72.1). Locale numbers ($1,234 vs 1.234,56€), dates (6 locales incl. Arabic), German collation, script transliteration (Cyrillic→Latin: Privet). First intl tool.
 25. intl_format — ICU 72.1 i18n: locale numbers, currencies ($/€/¥/£), dates (6 locales), collation, transliteration. First intl tool.
 26. soap_client — SOAP XML-RPC client (WSDL mode). Connected to public calculator service. Add(42,8)=50, Multiply(12,11)=132 verified. First SOAP/enterprise WS tool.
+27. soap_client — SOAP XML-RPC verified: Add(42,8)=50, Multiply(12,11)=132 via public WSDL. SOAP 1.1/1.2, WSDL/non-WSDL, HTTP auth. Final major protocol.
+28. data_to_report — First multi-capability composition tool. SQL query -> GD bar chart -> PDF report in one call. 12 rows (PHP/Python/JS chart) -> 536x300 PNG -> A4 PDF. libmagic-validated. End-to-end pipeline.
