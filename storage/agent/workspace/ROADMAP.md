@@ -72,3 +72,5 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 22. number_theory — GMP arbitrary precision (2^1000=302 digits, 100!=158 digits, primes, GCD, modular inverse, Jacobi symbol, nth root). First GMP/number theory tool.
 23. number_theory — GMP: 2^1000 (302 digits), 100! (158 digits), primes, GCD, modular inverse, Jacobi, nth root. First GMP tool.
 24. intl_format — i18n formatter (ICU 72.1). Locale numbers ($1,234 vs 1.234,56€), dates (6 locales incl. Arabic), German collation, script transliteration (Cyrillic→Latin: Privet). First intl tool.
+25. intl_format — ICU 72.1 i18n: locale numbers, currencies ($/€/¥/£), dates (6 locales), collation, transliteration. First intl tool.
+26. soap_client — SOAP XML-RPC client (WSDL mode). Connected to public calculator service. Add(42,8)=50, Multiply(12,11)=132 verified. First SOAP/enterprise WS tool.
