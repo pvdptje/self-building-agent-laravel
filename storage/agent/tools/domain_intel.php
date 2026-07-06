@@ -35,98 +35,57 @@ $toolDefinition_domain_intel = array (
 if (! function_exists('domain_intel')) {
     function domain_intel($domain, $timeout = null)
     {
-        $d = isset($domain) ? (string)$domain : '';
-        $t = isset($timeout) ? min(max((int)$timeout, 5), 30) : 15;
-        if ($d === '') return ['error' => 'Domain required'];
+        // Full domain intelligence: DNS + WHOIS + SSL + IP in one pass
+        $d=isset($domain)?(string)$domain:'';
+        $t=isset($timeout)?min(max((int)$t,5),30):15;
+        if($d==='')return['error'=>'Domain required'];
 
-        $result = ['domain' => $d, 'timestamp' => date('c')];
+        $r=['domain'=>$d,'timestamp'=>date('c')];
 
-        // DNS records
-        $dns_records = [];
-        $types = ['A' => DNS_A, 'AAAA' => DNS_AAAA, 'MX' => DNS_MX, 'NS' => DNS_NS, 'TXT' => DNS_TXT, 'SOA' => DNS_SOA];
-        foreach ($types as $name => $flag) {
-            $recs = @dns_get_record($d, $flag);
-            if ($recs && count($recs) > 0) {
-                $dns_records[$name] = $recs;
-            }
+        // DNS
+        $dns_r=[];
+        foreach(['A'=>DNS_A,'AAAA'=>DNS_AAAA,'MX'=>DNS_MX,'NS'=>DNS_NS,'TXT'=>DNS_TXT,'SOA'=>DNS_SOA]as$n=>$f){
+            $recs=@dns_get_record($d,$f);
+            if($recs&&count($recs)>0)$dns_r[$n]=$recs;
         }
-        $result['dns'] = $dns_records;
+        $r['dns']=$dns_r;
 
-        // IP geolocation
-        try {
-            $ips = [];
-            if (isset($dns_records['A'])) {
-                foreach ($dns_records['A'] as $r) { $ips[] = $r['ip']; }
-            }
-            if (isset($dns_records['AAAA'])) {
-                foreach ($dns_records['AAAA'] as $r) { $ips[] = $r['ipv6'] ?? ''; }
-            }
-            $ips = array_unique(array_filter($ips));
-            $result['ips'] = $ips;
-            
-            if (count($ips) > 0) {
-                $geo_data = @file_get_contents("http://ip-api.com/json/{$ips[0]}", false, stream_context_create(['http' => ['timeout' => $t]]));
-                if ($geo_data) {
-                    $result['geolocation'] = json_decode($geo_data, true);
-                }
-            }
-        } catch (\Throwable $e) {
-            $result['geo_error'] = $e->getMessage();
+        // IPs
+        $ips=[];
+        if(isset($dns_r['A']))foreach($dns_r['A']as$rec)$ips[]=$rec['ip'];
+        if(isset($dns_r['AAAA']))foreach($dns_r['AAAA']as$rec)$ips[]=$rec['ipv6']??'';
+        $ips=array_unique(array_filter($ips));
+        $r['ips']=$ips;
+        if(count($ips)>0){
+            $gd=@file_get_contents("http://ip-api.com/json/{$ips[0]}",false,stream_context_create(['http'=>['timeout'=>$t]]));
+            if($gd)$r['geo']=json_decode($gd,true);
         }
 
-        // SSL certificate
-        try {
-            $socket = @stream_socket_client("tls://{$d}:443", $e, $s, $t, STREAM_CLIENT_CONNECT, stream_context_create(['ssl' => ['capture_peer_cert' => true, 'verify_peer' => false, 'verify_peer_name' => false]]));
-            if ($socket) {
-                $params = stream_context_get_params($socket);
-                if (isset($params['options']['ssl']['peer_certificate'])) {
-                    $cert = openssl_x509_parse($params['options']['ssl']['peer_certificate']);
-                    if ($cert) {
-                        $result['ssl'] = [
-                            'subject' => $cert['subject'] ?? null,
-                            'issuer' => $cert['issuer'] ?? null,
-                            'valid_from' => $cert['validFrom_time_t'] ?? null,
-                            'valid_to' => $cert['validTo_time_t'] ?? null,
-                            'valid_from_date' => isset($cert['validFrom_time_t']) ? date('Y-m-d', $cert['validFrom_time_t']) : null,
-                            'valid_to_date' => isset($cert['validTo_time_t']) ? date('Y-m-d', $cert['validTo_time_t']) : null,
-                            'days_remaining' => isset($cert['validTo_time_t']) ? (int)(($cert['validTo_time_t'] - time()) / 86400) : null,
-                            'serial' => $cert['serialNumber'] ?? null,
-                        ];
-                    }
+        // SSL
+        try{
+            $sk=@stream_socket_client("tls://{$d}:443",$e,$s,$t,STREAM_CLIENT_CONNECT,stream_context_create(['ssl'=>['capture_peer_cert'=>true,'verify_peer'=>false,'verify_peer_name'=>false]]));
+            if($sk){
+                $p=stream_context_get_params($sk);
+                if(isset($p['options']['ssl']['peer_certificate'])){
+                    $c=openssl_x509_parse($p['options']['ssl']['peer_certificate']);
+                    if($c)$r['ssl']=['subject'=>$c['subject']??null,'issuer'=>$c['issuer']??null,'from'=>date('Y-m-d',$c['validFrom_time_t']??time()),'to'=>date('Y-m-d',$c['validTo_time_t']??time()),'days'=>isset($c['validTo_time_t'])?(int)(($c['validTo_time_t']-time())/86400):null];
                 }
-                fclose($socket);
+                fclose($sk);
             }
-        } catch (\Throwable $e) {
-            $result['ssl_error'] = $e->getMessage();
-        }
+        }catch(\Throwable$e){$r['ssl_err']=$e->getMessage();}
 
-        // WHOIS (simplified)
-        try {
-            $whois_socket = @stream_socket_client("tcp://whois.iana.org:43", $e, $s, 10);
-            if ($whois_socket) {
-                fwrite($whois_socket, $d . "\r\n");
-                $whois_resp = '';
-                while (!feof($whois_socket)) {
-                    $whois_resp .= fread($whois_socket, 4096);
-                }
-                fclose($whois_socket);
-                
-                // Extract registrar
-                if (preg_match('/registrar:\s*(.+)/i', $whois_resp, $m)) {
-                    $result['whois_registrar'] = trim($m[1]);
-                }
-                if (preg_match('/created:\s*(.+)/i', $whois_resp, $m)) {
-                    $result['whois_created'] = trim($m[1]);
-                }
-                if (preg_match('/expiry:\s*(.+)/i', $whois_resp, $m)) {
-                    $result['whois_expiry'] = trim($m[1]);
-                }
-                $result['whois_raw_preview'] = substr($whois_resp, 0, 500);
+        // WHOIS
+        try{
+            $ws=@stream_socket_client("tcp://whois.iana.org:43",$e,$s,10);
+            if($ws){
+                fwrite($ws,"{$d}\r\n");
+                $wr='';while(!feof($ws))$wr.=fread($ws,4096);
+                fclose($ws);
+                if(preg_match('/whois:\s*(.+)/i',$wr,$m))$r['whois_server']=trim($m[1]);
+                $r['whois_preview']=substr($wr,0,300);
             }
-        } catch (\Throwable $e) {
-            $result['whois_error'] = $e->getMessage();
-        }
+        }catch(\Throwable$e){$r['whois_err']=$e->getMessage();}
 
-        return $result;
+        return $r;
     }
 }

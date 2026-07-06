@@ -84,3 +84,4 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 34. find_duplicates — MD5 content hash dedup: 425 files, 5 dup groups, 32.5KB wasted. Found ZIP-extract copies + identical PNGs.
 35. tool_to_markdown — Auto-documentation from PHP source via tokenizer. Extracts params, defaults, types, returns. Generated docs for websocket_client and http_fetch. First metaprogramming/doc tool.
 36. file_watchdog — Integrity monitoring. Scans dir, persists MD5 manifest to SQLite, reports new/modified/deleted files. 226 tools tracked, 0 changes detected on re-run. First unattended integrity tool.
+37. file_watchdog — SQLite-persisted integrity monitor. 226 files tracked, MD5 hashed, 0 changes. Reports new/modified/deleted across calls.

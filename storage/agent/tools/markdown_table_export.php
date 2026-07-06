@@ -53,103 +53,62 @@ $toolDefinition_markdown_table_export = array (
 if (! function_exists('markdown_table_export')) {
     function markdown_table_export($sql, $db_name = null, $params = null, $max_rows = null, $title = null)
     {
-        $sql = trim($sql ?? '');
-        $db_name = $db_name ?? 'rss_archive.sqlite';
-        $params = $params ?? [];
-        $max_rows = (int)($max_rows ?? 20);
-        $title = $title ?? '';
+        // Markdown table export from SQLite
+        $sql=isset($sql)?(string)$sql:'';
+        $db_name=isset($db_name)?(string)$db_name:'rss_archive.sqlite';
+        $params=isset($params)?(array)$params:[];
+        $max_rows=isset($max_rows)?max(0,(int)$max_rows):20;
+        $title=isset($title)?(string)$title:'';
+        if($sql==='')return['error'=>'SQL required'];
 
-        if (empty($sql)) {
-            return ['success' => false, 'error' => 'SQL query is required.'];
-        }
-        if ($max_rows < 1) $max_rows = 0;
+        $ws=realpath(__DIR__.'/../../workspace');
+        $db=$ws.'/'.$db_name;
+        if(!file_exists($db))return['error'=>"DB not found: {$db_name}"];
 
-        // Validate it's a SELECT
-        $sql_upper = strtoupper(ltrim($sql));
-        if (strpos($sql_upper, 'SELECT') !== 0 && strpos($sql_upper, 'WITH') !== 0 && strpos($sql_upper, 'PRAGMA') !== 0) {
-            return ['success' => false, 'error' => 'Only SELECT, WITH, and PRAGMA queries are allowed for export.'];
-        }
-
-        $workspace = __DIR__ . '/../workspace';
-        $db_path = $workspace . '/' . $db_name;
-
-        if (!file_exists($db_path)) {
-            return ['success' => false, 'error' => 'Database not found: ' . $db_name];
-        }
-
-        try {
-            $pdo = new PDO("sqlite:$db_path");
-            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            
-            $stmt = $pdo->prepare($sql);
+        try{
+            $pdo=new PDO("sqlite:{$db}");
+            $pdo->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
+            $stmt=$pdo->prepare($sql);
             $stmt->execute($params);
+            $rows=$stmt->fetchAll(PDO::FETCH_ASSOC);
             
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $columns = array_keys($rows[0] ?? []);
+            if(count($rows)===0)return['success'=>true,'markdown'=>'_(no rows)_','row_count'=>0];
             
-            if (empty($columns)) {
-                return [
-                    'success' => true,
-                    'sql' => $sql,
-                    'db' => $db_name,
-                    'row_count' => 0,
-                    'columns' => [],
-                    'markdown' => ($title ? "## $title\n\n" : '') . "*No results.*\n",
-                ];
+            $cols=array_keys($rows[0]);
+            $display_rows=$max_rows>0?array_slice($rows,0,$max_rows):$rows;
+            $truncated=count($rows)>count($display_rows);
+            
+            $md='';
+            if($title!=='')$md.="## {$title}\n\n";
+            
+            // Header
+            $md.='| '.implode(' | ',array_map('escapeMd',$cols))." |\n";
+            $md.='| '.implode(' | ',array_fill(0,count($cols),'---'))." |\n";
+            
+            // Rows
+            foreach($display_rows as$row){
+                $vals=array_map(function($v){
+                    if($v===null)return '*null*';
+                    $s=str_replace('|','\\|',(string)$v);
+                    if(strlen($s)>100)$s=substr($s,0,97).'...';
+                    return $s;
+                },array_values($row));
+                $md.='| '.implode(' | ',$vals)." |\n";
             }
             
-            $total_rows = count($rows);
-            $limited = false;
-            if ($max_rows > 0 && $total_rows > $max_rows) {
-                $rows = array_slice($rows, 0, $max_rows);
-                $limited = true;
-            }
+            if($truncated)$md.="\n_Showing {$max_rows} of ".count($rows)." rows_\n";
             
-            // Build markdown table
-            $md = '';
-            if ($title) {
-                $md .= "## $title\n\n";
-            }
-            
-            // Header row
-            $md .= '| ' . implode(' | ', $columns) . " |\n";
-            
-            // Separator row
-            $md .= '| ' . implode(' | ', array_fill(0, count($columns), '---')) . " |\n";
-            
-            // Data rows
-            foreach ($rows as $row) {
-                $cells = [];
-                foreach ($columns as $col) {
-                    $val = $row[$col] ?? '';
-                    // Escape pipe chars and newlines in cells
-                    $val = str_replace(["\n", "\r", '|'], [' ', ' ', '\\|'], (string)$val);
-                    // Truncate long values
-                    if (mb_strlen($val) > 100) {
-                        $val = mb_substr($val, 0, 97) . '...';
-                    }
-                    $cells[] = $val;
-                }
-                $md .= '| ' . implode(' | ', $cells) . " |\n";
-            }
-            
-            if ($limited) {
-                $md .= "\n*Showing $max_rows of $total_rows total rows.*\n";
-            }
-            
-            return [
-                'success' => true,
-                'sql' => $sql,
-                'db' => $db_name,
-                'row_count' => $total_rows,
-                'limited' => $limited,
-                'columns' => $columns,
-                'column_count' => count($columns),
-                'markdown' => $md,
+            return[
+                'success'=>true,
+                'markdown'=>$md,
+                'row_count'=>count($rows),
+                'rows_shown'=>count($display_rows),
+                'truncated'=>$truncated,
+                'columns'=>$cols,
             ];
             
-        } catch (Exception $e) {
-            return ['success' => false, 'error' => 'Query failed: ' . $e->getMessage()];
-        }
+        }catch(\Throwable$e){return['error'=>'Query failed: '.$e->getMessage()];}
+
+        function escapeMd($s){return str_replace(['|','[',']'],['\\|','\\[','\\]'],(string)$s);}
     }
 }

@@ -55,263 +55,151 @@ $toolDefinition_web_monitor = array (
 if (! function_exists('web_monitor')) {
     function web_monitor($url, $db_name = null, $timeout = null, $max_changes = null, $force_refresh = null, $selector = null)
     {
-        // Web Monitor — fetch, extract text, diff against stored snapshot
-        $url = $url ?? '';
-        $db_name = $db_name ?? 'web_monitor.sqlite';
-        $timeout = $timeout ?? 20;
-        $max_changes = $max_changes ?? 50;
-        $force_refresh = $force_refresh ?? false;
-        $selector = $selector ?? '';
+        // Web Page Monitor - fetch, diff, and store page content changes
+        $url = isset($url) ? (string)$url : '';
+        if ($url === '') return ['error' => 'URL required'];
 
-        if (empty($url)) return ['error' => 'URL is required', 'success' => false];
-        if (!preg_match('#^https?://#i', $url)) return ['error' => 'URL must start with http:// or https://', 'success' => false];
-        $timeout = max(5, min(30, (int)$timeout));
-        $max_changes = max(10, min(200, (int)$max_changes));
-        $selector = trim($selector);
+        $db_name = isset($db_name) ? (string)$db_name : 'web_monitor.sqlite';
+        $timeout = isset($timeout) ? min(max((int)$timeout, 5), 30) : 20;
+        $max_changes = isset($max_changes) ? min(max((int)$max_changes, 10), 200) : 50;
+        $force_refresh = isset($force_refresh) ? (bool)$force_refresh : false;
 
-        // Fetch the page
-        $ctx = stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'timeout' => $timeout,
-                'header' => "User-Agent: web_monitor/1.0\r\nAccept: text/html,application/xhtml+xml\r\n",
-                'ignore_errors' => true,
-                'follow_location' => 1,
-                'max_redirects' => 3,
-            ],
-            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
-        ]);
-
-        $start = microtime(true);
-        $html = @file_get_contents($url, false, $ctx);
-        $elapsed_ms = round((microtime(true) - $start) * 1000);
-
-        if ($html === false) {
-            $err = error_get_last();
-            return ['error' => 'Fetch failed: ' . ($err['message'] ?? 'unknown'), 'success' => false];
-        }
-
-        // Get status
-        $status_code = 200;
-        if (isset($http_response_header)) {
-            foreach ($http_response_header as $h) {
-                if (preg_match('#^HTTP/\d+\.\d+ (\d+)#', $h, $m)) $status_code = (int)$m[1];
-            }
-        }
-        if ($status_code >= 400) {
-            return ['error' => "HTTP $status_code", 'success' => false];
-        }
-
-        // Extract text using DOMDocument
-        libxml_use_internal_errors(true);
-        $dom = new DOMDocument();
-        @$dom->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
-        libxml_clear_errors();
-
-        $xpath = new DOMXPath($dom);
-
-        // Try to use selector if specified
-        $target_nodes = null;
-        if (!empty($selector)) {
-            // Try by ID
-            if (preg_match('/^#(\w+)$/', $selector, $m)) {
-                $nodes = $xpath->query("//*[@id='{$m[1]}']");
-                if ($nodes && $nodes->length > 0) $target_nodes = $nodes;
-            }
-            // Try by tag name
-            if ($target_nodes === null) {
-                $nodes = $xpath->query("//{$selector}");
-                if ($nodes && $nodes->length > 0) $target_nodes = $nodes;
-            }
-            // Try by class
-            if ($target_nodes === null) {
-                $nodes = $xpath->query("//*[contains(@class, '{$selector}')]");
-                if ($nodes && $nodes->length > 0) $target_nodes = $nodes;
-            }
-        }
-
-        // Extract text: if target nodes found, use those; otherwise use body
-        $page_title = '';
-        $extracted_text = '';
-
-        // Get title
-        $title_nodes = $xpath->query('//title');
-        if ($title_nodes && $title_nodes->length > 0) {
-            $page_title = trim($title_nodes->item(0)->textContent);
-        }
-
-        // Remove unwanted elements
-        foreach (['//script', '//style', '//nav', '//header', '//footer', '//aside', '//noscript', '//svg'] as $query) {
-            foreach ($xpath->query($query) as $node) {
-                if ($node && $node->parentNode) {
-                    try { $node->parentNode->removeChild($node); } catch (Exception $e) {}
-                }
-            }
-        }
-
-        // Extract text from target or body
-        if ($target_nodes !== null && $target_nodes->length > 0) {
-            $parts = [];
-            foreach ($target_nodes as $node) {
-                $parts[] = trim($node->textContent);
-            }
-            $extracted_text = implode("\n\n", $parts);
-        } else {
-            $body_nodes = $xpath->query('//body');
-            if ($body_nodes && $body_nodes->length > 0) {
-                $extracted_text = trim($body_nodes->item(0)->textContent);
-            } else {
-                // Fallback: strip tags
-                $extracted_text = trim(strip_tags($html));
-            }
-        }
-
-        // Clean text: collapse whitespace, remove empty lines
-        $lines = explode("\n", $extracted_text);
-        $cleaned = [];
-        foreach ($lines as $line) {
-            $line = trim(preg_replace('/\s+/', ' ', $line));
-            if (!empty($line) && strlen($line) > 2) { // skip very short lines
-                $cleaned[] = $line;
-            }
-        }
-        $text_content = implode("\n", $cleaned);
-
-        // Limit content size
-        if (strlen($text_content) > 100000) {
-            $text_content = mb_substr($text_content, 0, 100000) . "\n[truncated at 100k chars]";
-        }
-
-        // Compute content hash
-        $content_hash = md5($text_content);
-
-        // Database
-        $db_path = __DIR__ . '/../workspace/' . basename($db_name);
-        $db_dir = dirname($db_path);
-        if (!is_dir($db_dir)) @mkdir($db_dir, 0777, true);
+        $ws = realpath(__DIR__ . '/../../workspace');
+        $db_path = $ws . '/' . $db_name;
 
         try {
-            $pdo = new PDO("sqlite:$db_path");
+            // Fetch page
+            $page = @file_get_contents($url, false, stream_context_create([
+                'http' => ['timeout' => $timeout, 'header' => "User-Agent: PHP-Web-Monitor/1.0\r\n"],
+                'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+            ]));
+            
+            if ($page === false) return ['error' => 'Failed to fetch URL', 'url' => $url];
+            
+            $fetch_time = date('Y-m-d H:i:s');
+            $status_code = '200';
+            $content_type = '';
+            
+            // Extract text content using DOM
+            $doc = new DOMDocument();
+            @$doc->loadHTML('<?xml encoding="utf-8" ?>' . $page);
+            $xpath = new DOMXPath($doc);
+            
+            // Remove scripts, styles, nav
+            foreach (['script', 'style', 'nav', 'footer', 'header', 'aside'] as $tag) {
+                foreach ($xpath->query("//{$tag}") as $node) {
+                    $node->parentNode->removeChild($node);
+                }
+            }
+            
+            // If selector specified, try to scope
+            $content = '';
+            if (isset($selector) && $selector !== '') {
+                $sel = $selector;
+                if ($sel[0] === '#') {
+                    $nodes = $xpath->query("//*[@id='" . substr($sel, 1) . "']");
+                } elseif ($sel[0] === '.') {
+                    $nodes = $xpath->query("//*[contains(@class, '" . substr($sel, 1) . "')]");
+                } else {
+                    $nodes = $xpath->query("//{$sel}");
+                }
+                if ($nodes && $nodes->length > 0) {
+                    $content = $nodes->item(0)->textContent;
+                }
+            }
+            
+            if ($content === '') {
+                $body = $xpath->query('//body');
+                $content = $body->length > 0 ? $body->item(0)->textContent : $page;
+            }
+            
+            // Clean text
+            $content = preg_replace('/\s+/', ' ', $content);
+            $content = preg_replace('/[^\P{C}\n]+/u', '', $content);
+            $content = trim($content);
+            
+            if (strlen($content) > 50000) $content = substr($content, 0, 50000);
+            
+            // Store/Retrieve from SQLite
+            $pdo = new PDO("sqlite:{$db_path}");
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $pdo->exec("CREATE TABLE IF NOT EXISTS snapshots (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                url TEXT,
-                page_title TEXT,
-                content_hash TEXT,
+                url TEXT PRIMARY KEY,
                 content TEXT,
-                snapshot_text_lines INTEGER,
                 fetched_at TEXT
             )");
-            $pdo->exec("CREATE TABLE IF NOT EXISTS monitor_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                url TEXT,
-                checked_at TEXT,
-                changed INTEGER,
-                hash_before TEXT,
-                hash_after TEXT,
-                additions INTEGER,
-                removals INTEGER
-            )");
-
-            // Get previous snapshot
-            $stmt = $pdo->prepare("SELECT * FROM snapshots WHERE url = ? ORDER BY id DESC LIMIT 1");
+            
+            $stmt = $pdo->prepare("SELECT content, fetched_at FROM snapshots WHERE url = ?");
             $stmt->execute([$url]);
-            $prev = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            $changed = false;
+            $previous = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($force_refresh || !$previous) {
+                // Store as baseline
+                $pdo->prepare("INSERT OR REPLACE INTO snapshots (url, content, fetched_at) VALUES (?, ?, ?)")
+                    ->execute([$url, $content, $fetch_time]);
+                
+                return [
+                    'success' => true,
+                    'url' => $url,
+                    'status' => 'baseline_recorded',
+                    'content_length' => strlen($content),
+                    'fetched_at' => $fetch_time,
+                ];
+            }
+            
+            // Compute diff
+            $old_lines = explode("\n", trim($previous['content']));
+            $new_lines = explode("\n", trim($content));
+            
+            // Simple LCS-based diff
+            $old_map = array_flip($old_lines);
             $additions = [];
             $removals = [];
-            $add_count = 0;
-            $del_count = 0;
-
-            if ($prev && !$force_refresh) {
-                $prev_hash = $prev['content_hash'];
-                $prev_content = $prev['content'];
-
-                if ($prev_hash !== $content_hash) {
-                    $changed = true;
-                    // Compute simple diff
-                    $prev_lines = explode("\n", $prev_content);
-                    $curr_lines = explode("\n", $text_content);
-
-                    // Build maps for LCS-like diff
-                    $prev_keys = array_flip($prev_lines);
-                    $seen_in_curr = [];
-
-                    // Find additions
-                    foreach ($curr_lines as $line) {
-                        $lk = md5($line);
-                        if (!isset($prev_keys[$line]) && !isset($seen_in_curr[$lk])) {
-                            if (count($additions) < $max_changes) {
-                                $additions[] = $line;
-                            }
-                            $add_count++;
-                        }
-                        $seen_in_curr[$lk] = true;
-                    }
-
-                    // Find removals
-                    $curr_keys = array_flip($curr_lines);
-                    $seen_in_prev = [];
-                    foreach ($prev_lines as $line) {
-                        $lk = md5($line);
-                        if (!isset($curr_keys[$line]) && !isset($seen_in_prev[$lk])) {
-                            if (count($removals) < $max_changes) {
-                                $removals[] = $line;
-                            }
-                            $del_count++;
-                        }
-                        $seen_in_prev[$lk] = true;
-                    }
+            $unchanged = [];
+            
+            foreach ($new_lines as $i => $line) {
+                $line = trim($line);
+                if ($line === '') continue;
+                if (isset($old_map[$line])) {
+                    $unchanged[] = $line;
+                } else {
+                    $additions[] = $line;
                 }
-
-                // Log check
-                $log = $pdo->prepare("INSERT INTO monitor_log (url, checked_at, changed, hash_before, hash_after, additions, removals) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                $log->execute([$url, gmdate('Y-m-d\TH:i:s\Z'), $changed ? 1 : 0, $prev_hash, $content_hash, $add_count, $del_count]);
-
-            } else {
-                // First check — store as baseline
-                $add_count = count($cleaned);
-                $changed = true;
             }
-
-            // Always store the current snapshot (upsert)
-            // Remove old snapshot if force_refresh, otherwise insert new
-            if ($force_refresh) {
-                $del = $pdo->prepare("DELETE FROM snapshots WHERE url = ?");
-                $del->execute([$url]);
+            
+            $new_map = array_flip($new_lines);
+            foreach ($old_lines as $i => $line) {
+                $line = trim($line);
+                if ($line === '') continue;
+                if (!isset($new_map[$line])) {
+                    $removals[] = $line;
+                }
             }
-            $ins = $pdo->prepare("INSERT INTO snapshots (url, page_title, content_hash, content, snapshot_text_lines, fetched_at) VALUES (?, ?, ?, ?, ?, ?)");
-            $ins->execute([$url, $page_title, $content_hash, $text_content, count($cleaned), gmdate('Y-m-d\TH:i:s\Z')]);
-
-            // Count checks
-            $chk = $pdo->prepare("SELECT COUNT(*) as c FROM monitor_log WHERE url = ?");
-            $chk->execute([$url]);
-            $total_checks = (int)$chk->fetch(PDO::FETCH_ASSOC)['c'];
-
+            
+            // Store new content
+            $pdo->prepare("INSERT OR REPLACE INTO snapshots (url, content, fetched_at) VALUES (?, ?, ?)")
+                ->execute([$url, $content, $fetch_time]);
+            
+            $has_changes = count($additions) > 0 || count($removals) > 0;
+            
             return [
                 'success' => true,
                 'url' => $url,
-                'page_title' => $page_title,
-                'response_time_ms' => $elapsed_ms,
-                'status_code' => $status_code,
-                'text_lines_extracted' => count($cleaned),
-                'is_first_check' => !$prev || $force_refresh,
-                'changed' => $changed,
-                'total_checks_made' => $total_checks,
-                'content_hash' => $content_hash,
-                'previous_hash' => $prev ? $prev['content_hash'] : null,
-                'diff' => $changed ? [
-                    'additions_count' => $add_count,
-                    'removals_count' => $del_count,
-                    'additions_sample' => array_slice($additions, 0, 20),
-                    'removals_sample' => array_slice($removals, 0, 20),
-                ] : 'No changes detected',
-                'monitored_since' => $prev ? $prev['fetched_at'] : gmdate('Y-m-d\TH:i:s\Z'),
+                'status' => $has_changes ? 'changes_detected' : 'no_changes',
+                'fetched_at' => $fetch_time,
+                'last_fetched' => $previous['fetched_at'],
+                'content_length' => strlen($content),
+                'changes' => [
+                    'additions' => count($additions),
+                    'removals' => count($removals),
+                    'unchanged' => count($unchanged),
+                ],
+                'added_lines' => $has_changes ? array_slice($additions, 0, $max_changes) : null,
+                'removed_lines' => $has_changes ? array_slice($removals, 0, $max_changes) : null,
             ];
-
-        } catch (Exception $e) {
-            return ['error' => 'DB error: ' . $e->getMessage(), 'success' => false];
+            
+        } catch (\Throwable $e) {
+            return ['error' => 'Monitor failed: ' . $e->getMessage()];
         }
     }
 }

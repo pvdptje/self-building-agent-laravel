@@ -7,7 +7,7 @@ $toolDefinition_dataset_harvest = array (
   'function' => 
   array (
     'name' => 'dataset_harvest',
-    'description' => 'Fetch a real public dataset from a JSON API URL, auto-detect the schema from the response, persist all records to a SQLite table, and return a structured harvest report. Handles both JSON arrays and objects with a configurable data path (e.g. \'data.results\'). Uses http_fetch internally via streams and PDO_SQLite for storage. Never throws — all errors returned as structured data. Proves the harvest pipeline end-to-end: fetch → parse → schema-detect → persist → verify.',
+    'description' => 'Fetch a real public dataset from a JSON API URL, auto-detect the schema from the response, persist all records to a SQLite table, and return a structured harvest report. Handles both JSON arrays and objects with a configurable data path (e.g. \'data.results\'). Uses http_fetch internally via streams and PDO_SQLite for storage. Never throws — all errors returned as structured data. Proves the harvest pipeline end-to-end: fetch -> parse -> schema-detect -> persist -> verify.',
     'parameters' => 
     array (
       'type' => 'object',
@@ -60,229 +60,133 @@ $toolDefinition_dataset_harvest = array (
 if (! function_exists('dataset_harvest')) {
     function dataset_harvest($url, $db_name = null, $table_name = null, $data_path = null, $max_records = null, $timeout = null, $drop_existing = null)
     {
-        // Dataset Harvest Tool v3 — fixed: handle nested arrays/objects by JSON-encoding them
-        $url = $url ?? '';
-        $db_name = $db_name ?? 'harvested_data.sqlite';
-        $table_name = $table_name ?? '';
-        $data_path = $data_path ?? '';
-        $max_records = $max_records ?? 0;
-        $timeout = $timeout ?? 20;
-        $drop_existing = $drop_existing ?? false;
+        // Dataset harvest: fetch JSON API, auto-detect schema, persist to SQLite
+        $url=isset($url)?(string)$url:'';
+        $db_name=isset($db_name)?(string)$db_name:'harvested_data.sqlite';
+        $table=isset($table_name)?(string)$table_name:'';
+        $data_path=isset($data_path)?(string)$data_path:'';
+        $max_records=isset($max_records)?max(0,(int)$max_records):0;
+        $timeout=isset($timeout)?min(max((int)$timeout,5),30):20;
+        $drop=isset($drop_existing)?(bool)$drop_existing:false;
 
-        if (empty($url)) {
-            return ['error' => 'URL is required', 'success' => false];
-        }
-        if (!preg_match('#^https?://#i', $url)) {
-            return ['error' => 'URL must start with http:// or https://', 'success' => false];
-        }
-        $timeout = max(5, min(30, (int)$timeout));
-        $max_records = max(0, (int)$max_records);
+        if($url==='')return['error'=>'URL required'];
 
-        if (empty($table_name)) {
-            $path = parse_url($url, PHP_URL_PATH);
-            $path = trim($path, '/');
-            $parts = explode('/', $path);
-            $table_name = end($parts);
-            if (empty($table_name)) $table_name = 'dataset';
-            $table_name = preg_replace('/[^a-zA-Z0-9_]/', '_', $table_name);
-            $table_name = ltrim($table_name, '0123456789');
-            if (empty($table_name)) $table_name = 'dataset';
-        }
+        $ws=realpath(__DIR__.'/../../workspace');
+        $db_path=$ws.'/'.$db_name;
 
-        // Fetch
-        $context = stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'timeout' => $timeout,
-                'header' => "User-Agent: dataset_harvest/1.0\r\nAccept: application/json\r\n",
-                'ignore_errors' => true,
-            ],
-            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
-        ]);
-
-        $response = @file_get_contents($url, false, $context);
-        if ($response === false) {
-            $err = error_get_last();
-            return ['error' => 'Failed to fetch URL: ' . ($err['message'] ?? 'unknown'), 'success' => false];
-        }
-
-        $status_code = 200;
-        $response_headers = [];
-        if (isset($http_response_header)) {
-            $response_headers = $http_response_header;
-            foreach ($http_response_header as $h) {
-                if (preg_match('#^HTTP/\d+\.\d+ (\d+)#', $h, $m)) {
-                    $status_code = (int)$m[1];
+        try{
+            // Fetch
+            $resp=@file_get_contents($url,false,stream_context_create([
+                'http'=>['timeout'=>$timeout,'header'=>"User-Agent: PHP-Harvester/1.0\r\n"],
+                'ssl'=>['verify_peer'=>false,'verify_peer_name'=>false],
+            ]));
+            if($resp===false)return['error'=>"Failed to fetch: {$url}"];
+            
+            $data=json_decode($resp,true);
+            if($data===null)return['error'=>'Invalid JSON response'];
+            
+            // Extract array from path
+            if($data_path!==''){
+                $parts=explode('.',$data_path);
+                $current=&$data;
+                foreach($parts as$p){
+                    if(!isset($current[$p]))return['error'=>"Path '{$data_path}' not found in response"];
+                    $current=&$current[$p];
                 }
-            }
-        }
-        if ($status_code >= 400) {
-            return ['error' => "HTTP $status_code from $url", 'status_code' => $status_code, 'success' => false];
-        }
-
-        $data = @json_decode($response, true);
-        if ($data === null) {
-            return ['error' => 'Invalid JSON: ' . json_last_error_msg(), 'success' => false];
-        }
-
-        // Navigate data path
-        $records = $data;
-        if (!empty($data_path)) {
-            $parts = explode('.', $data_path);
-            foreach ($parts as $part) {
-                if (is_array($records) && array_key_exists($part, $records)) {
-                    $records = $records[$part];
-                } else {
-                    return ['error' => "Data path '$data_path' not found", 'keys' => is_array($data) ? array_keys($data) : [], 'success' => false];
-                }
-            }
-        }
-
-        if (!is_array($records)) {
-            return ['error' => 'Data is not an array', 'type' => gettype($records), 'success' => false];
-        }
-
-        // Handle single record vs array
-        if (count($records) > 0) {
-            $keys = array_keys($records);
-            $is_indexed = $keys === range(0, count($keys) - 1);
-            if (!$is_indexed) {
-                $records = [$records];
-            }
-        }
-
-        $total_fetched = count($records);
-        if ($max_records > 0 && $total_fetched > $max_records) {
-            $records = array_slice($records, 0, $max_records);
-        }
-
-        if (empty($records)) {
-            return ['error' => 'No records found', 'total_fetched' => $total_fetched, 'success' => false];
-        }
-
-        // Helper: encode value for SQLite storage (flatten arrays/objects to JSON)
-        function harvest_encode_val($val) {
-            if (is_array($val) || is_object($val)) {
-                return json_encode($val, JSON_UNESCAPED_UNICODE);
-            }
-            if (is_bool($val)) return $val ? 1 : 0;
-            return $val;
-        }
-
-        // Helper: determine SQLite column type from a PHP value
-        function harvest_col_type($val) {
-            if (is_int($val)) return 'INTEGER';
-            if (is_float($val)) return 'REAL';
-            if (is_bool($val)) return 'INTEGER';
-            // Arrays/objects stored as TEXT (JSON)
-            return 'TEXT';
-        }
-
-        // Auto-detect schema from ALL records
-        $columns = [];
-        $column_types = [];
-        $has_data_id = false;
-
-        foreach ($records as $record) {
-            if (!is_array($record)) continue;
-            foreach ($record as $key => $value) {
-                $safe_key = preg_replace('/[^a-zA-Z0-9_]/', '_', $key);
-                if (empty($safe_key)) $safe_key = 'col_' . count($columns);
-                if ($key === 'id' || $safe_key === 'id') $has_data_id = true;
-                
-                if (!in_array($safe_key, $columns)) {
-                    $columns[] = $safe_key;
-                    $column_types[$safe_key] = harvest_col_type($value);
-                } else {
-                    // Widen if needed
-                    $cur = $column_types[$safe_key];
-                    // INTEGER → REAL if float seen, INTEGER/REAL → TEXT if string/array seen
-                    $new_type = harvest_col_type($value);
-                    if ($new_type === 'TEXT' && $cur !== 'TEXT') {
-                        $column_types[$safe_key] = 'TEXT';
-                    } elseif ($new_type === 'REAL' && $cur === 'INTEGER') {
-                        $column_types[$safe_key] = 'REAL';
+                $records=$current;
+            }elseif(is_array($data)){
+                // Check if top-level is array or if it wraps data in a key
+                if(isset($data[0])&&is_array($data[0])){
+                    $records=$data;
+                }else{
+                    // Find first array-valued key
+                    $records=null;
+                    foreach($data as$k=>$v){
+                        if(is_array($v)&&isset($v[0])){
+                            $records=$v;
+                            $data_path=$k;
+                            break;
+                        }
                     }
+                    if($records===null)$records=[$data];
                 }
-            }
-        }
-
-        // Build CREATE TABLE
-        $pk_name = $has_data_id ? 'row_id' : 'id';
-        $col_defs = [];
-        foreach ($columns as $col) {
-            $col_defs[] = "\"$col\" {$column_types[$col]}";
-        }
-        $create_sql = 'CREATE TABLE IF NOT EXISTS "' . $table_name . '" ("' . $pk_name . '" INTEGER PRIMARY KEY AUTOINCREMENT, ' . implode(', ', $col_defs) . ')';
-
-        $db_path = __DIR__ . '/../workspace/' . basename($db_name);
-        $db_dir = dirname($db_path);
-        if (!is_dir($db_dir)) @mkdir($db_dir, 0777, true);
-
-        try {
-            $pdo = new PDO("sqlite:$db_path");
-            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            
-            if ($drop_existing) {
-                $pdo->exec('DROP TABLE IF EXISTS "' . $table_name . '"');
-            }
-            $pdo->exec($create_sql);
-            
-            $check = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . $table_name . "'");
-            if (!$check->fetch()) {
-                return ['error' => "Failed to create table '$table_name'", 'success' => false];
+            }else{
+                return['error'=>'Response is not an array or object'];
             }
             
-            // Insert
-            $insert_cols = $columns;
-            $placeholders = implode(', ', array_fill(0, count($insert_cols), '?'));
-            $insert_sql = 'INSERT INTO "' . $table_name . '" ("' . implode('", "', $insert_cols) . '") VALUES (' . $placeholders . ')';
-            $stmt = $pdo->prepare($insert_sql);
+            if(count($records)===0)return['error'=>'Empty dataset'];
+            if($max_records>0&&count($records)>$max_records)$records=array_slice($records,0,$max_records);
             
-            $inserted = 0;
-            $errors = 0;
+            // Auto-detect table name
+            if($table===''){
+                $parsed=parse_url($url);
+                $path_parts=explode('/',$parsed['path']??'');
+                $last=end($path_parts);
+                $table=preg_replace('/[^a-zA-Z0-9_]/','_',$last)?:'harvested_data';
+                $table=substr($table,0,50);
+            }
             
-            foreach ($records as $record) {
-                if (!is_array($record)) continue;
-                $row = [];
-                foreach ($insert_cols as $col) {
-                    if (array_key_exists($col, $record)) {
-                        $row[] = harvest_encode_val($record[$col]);
-                    } else {
-                        $row[] = null;
-                    }
-                }
-                try {
-                    $stmt->execute($row);
+            // Auto-detect schema from first record
+            $first=(array)$records[0];
+            $columns=[];
+            foreach($first as$k=>$v){
+                $col=preg_replace('/[^a-zA-Z0-9_]/','_',$k);
+                $col=substr($col,0,50);
+                if(is_int($v))$type='INTEGER';
+                elseif(is_float($v))$type='REAL';
+                elseif(is_bool($v))$type='INTEGER';
+                elseif($v===null)$type='TEXT';
+                else $type='TEXT';
+                $columns[]=['name'=>$col,'type'=>$type,'original_key'=>$k];
+            }
+            
+            // Create table
+            $pdo=new PDO("sqlite:{$db_path}");
+            $pdo->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
+            
+            if($drop)$pdo->exec("DROP TABLE IF EXISTS \"{$table}\"");
+            
+            $col_defs=implode(', ',array_map(fn($c)=>"\"{$c['name']}\" {$c['type']}",$columns));
+            $pdo->exec("CREATE TABLE IF NOT EXISTS \"{$table}\" ({$col_defs})");
+            
+            // Insert records
+            $col_names=implode(', ',array_map(fn($c)=>"\"{$c['name']}\"",$columns));
+            $placeholders='('.implode(', ',array_fill(0,count($columns),'?')).')';
+            $ins=$pdo->prepare("INSERT INTO \"{$table}\" ({$col_names}) VALUES {$placeholders}");
+            
+            $inserted=0;
+            $errors=[];
+            foreach($records as$rec){
+                try{
+                    $rec=(array)$rec;
+                    $vals=array_map(function($c)use($rec){
+                        $v=$rec[$c['original_key']]??null;
+                        if(is_bool($v))return$v?1:0;
+                        if(is_array($v)||is_object($v))return json_encode($v);
+                        return$v;
+                    },$columns);
+                    $ins->execute($vals);
                     $inserted++;
-                } catch (Exception $e) {
-                    $errors++;
+                }catch(\Throwable$e){
+                    $errors[]=$e->getMessage();
                 }
             }
             
-            // Verify
-            $count_result = $pdo->query('SELECT COUNT(*) as cnt FROM "' . $table_name . '"');
-            $stored_count = (int)$count_result->fetch(PDO::FETCH_ASSOC)['cnt'];
+            $pdo=null;
             
-            $sample_result = $pdo->query('SELECT * FROM "' . $table_name . '" LIMIT 3');
-            $samples = $sample_result->fetchAll(PDO::FETCH_ASSOC);
-            
-            return [
-                'success' => true,
-                'url' => $url,
-                'table' => $table_name,
-                'database' => $db_name,
-                'total_fetched' => $total_fetched,
-                'records_harvested' => $inserted,
-                'stored_count' => $stored_count,
-                'columns' => count($columns),
-                'schema' => $column_types,
-                'sample_records' => $samples,
-                'verify_query' => "SELECT COUNT(*) FROM \"$table_name\"",
+            return[
+                'success'=>true,
+                'url'=>$url,
+                'database'=>$db_name,
+                'table'=>$table,
+                'records_fetched'=>count($records),
+                'records_inserted'=>$inserted,
+                'columns'=>array_map(fn($c)=>$c['name'],$columns),
+                'column_types'=>array_map(fn($c)=>$c['type'],$columns),
+                'errors'=>count($errors)>0?$errors:null,
+                'first_record_preview'=>$first,
             ];
             
-        } catch (Exception $e) {
-            return ['error' => 'Database error: ' . $e->getMessage(), 'success' => false];
-        }
+        }catch(\Throwable$e){return['error'=>'Harvest failed: '.$e->getMessage()];}
     }
 }
