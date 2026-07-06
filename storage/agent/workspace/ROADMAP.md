@@ -68,3 +68,5 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 18. pdf_generator v2 — JPEG/PNG image embedding via XObjects. chart_generator (bar chart) embeded in PDF ✓. libmagic validated. Cross-tool composition: chart → PDF.
 19. shared_memory+file_lock+pdf_generator_v2 — IPC (shmop segments + flock locks) + PDF image embedding (chart XObject verified).
 20. image_exif_reader — First EXIF/camera metadata tool. Uses exif_imagetype/exif_read_data/exif_thumbnail. Reads camera make/model, exposure, GPS, dates, copyright. GPS coordinate converter. Tested on 5 JPEGs (COMPUTED/FILE/COMMENT sections parsed).
+21. image_exif_reader — EXIF camera metadata (exif_read_data). 5 JPEGs parsed. GPS converter. Exif extension first use.
+22. number_theory — GMP arbitrary precision (2^1000=302 digits, 100!=158 digits, primes, GCD, modular inverse, Jacobi symbol, nth root). First GMP/number theory tool.
