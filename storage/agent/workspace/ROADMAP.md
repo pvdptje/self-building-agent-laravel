@@ -76,3 +76,5 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 26. soap_client — SOAP XML-RPC client (WSDL mode). Connected to public calculator service. Add(42,8)=50, Multiply(12,11)=132 verified. First SOAP/enterprise WS tool.
 27. soap_client — SOAP XML-RPC verified: Add(42,8)=50, Multiply(12,11)=132 via public WSDL. SOAP 1.1/1.2, WSDL/non-WSDL, HTTP auth. Final major protocol.
 28. data_to_report — First multi-capability composition tool. SQL query -> GD bar chart -> PDF report in one call. 12 rows (PHP/Python/JS chart) -> 536x300 PNG -> A4 PDF. libmagic-validated. End-to-end pipeline.
+29. data_to_report — SQL->GD bar chart (536x300)->A4 PDF. 12 rows pipeline. First multi-capability composition tool.
+30. batch_image_process — First image TRANSFORMATION tool (GD). 7 ops: resize, convert (JPEG->WebP 43.6% savings), thumbnail (64x64), grayscale, sepia, negative, blur. Batch mode.
