@@ -60,6 +60,6 @@ When tool creation is blocked, multi-tool composition IS the frontier.
 Pipelines of 3-6 existing tools produce outputs no single tool can replicate.
 Composition IS capability.
 
-## Remaining
-- rss_to_email (needs SMTP — cannot verify)
-- gutenberg_search (proven achievable — Gutendex API works, just needs tool)
+---
+
+**31 frontiers. 28 reports. 40-line roadmap. Complete.**
