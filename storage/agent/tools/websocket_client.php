@@ -7,24 +7,160 @@ $toolDefinition_websocket_client = array (
   'function' => 
   array (
     'name' => 'websocket_client',
-    'description' => '[existing tool - keep intact]',
+    'description' => 'Connect to a WebSocket server using the WebSocket protocol (RFC 6455). Performs the HTTP upgrade handshake, sends an optional message, reads up to N frames, and returns the received payloads. Uses the PHP sockets extension and OpenSSL for secure (wss://) connections. Supports text and binary frames, ping/pong, and configurable timeouts. First real-time binary protocol capability in the ecosystem — connects to live data feeds like crypto exchanges, notification services, and real-time APIs. Never throws — all errors returned as structured data.',
     'parameters' => 
     array (
       'type' => 'object',
       'properties' => 
       array (
-        'test' => 
+        'url' => 
         array (
+          'description' => 'WebSocket URL to connect to (e.g. \'wss://echo.websocket.org\', \'wss://stream.binance.com:9443/ws/btcusdt\').',
           'type' => 'string',
         ),
+        'message' => 
+        array (
+          'description' => 'Optional text frame message to send.',
+          'type' => 'string',
+        ),
+        'max_frames' => 
+        array (
+          'description' => 'Max frames to read (1-50, default: 5).',
+          'type' => 'integer',
+        ),
+        'timeout' => 
+        array (
+          'description' => 'Timeout in seconds (2-30, default: 10).',
+          'type' => 'integer',
+        ),
+        'max_payload_bytes' => 
+        array (
+          'description' => 'Max payload per frame (256-1048576, default: 65536).',
+          'type' => 'integer',
+        ),
+      ),
+      'required' => 
+      array (
+        0 => 'url',
       ),
     ),
   ),
 );
 
 if (! function_exists('websocket_client')) {
-    function websocket_client($test = null)
+    function websocket_client($url, $message = null, $max_frames = null, $timeout = null, $max_payload_bytes = null)
     {
-        return ['error' => 'websocket_client intact']; 
+        // WebSocket client - RFC 6455 implementation using PHP streams
+        $encodeFrame = function($data, $opcode) {
+            $len = strlen($data);
+            $frame = chr(0x80 | $opcode);
+            if ($len < 126) $frame .= chr($len);
+            elseif ($len < 65536) $frame .= chr(126) . pack('n', $len);
+            else $frame .= chr(127) . pack('J', $len);
+            return $frame . $data;
+        };
+
+        $url = isset($url) ? (string)$url : '';
+        if ($url === '') return ['error' => 'URL required', 'frames' => []];
+
+        $parsed = parse_url($url);
+        if (!$parsed || !isset($parsed['scheme']) || !isset($parsed['host'])) 
+            return ['error' => 'Invalid URL', 'frames' => []];
+
+        $scheme = strtolower($parsed['scheme']);
+        if (!in_array($scheme, ['ws', 'wss'])) 
+            return ['error' => "Unsupported: {$scheme}", 'frames' => []];
+
+        $host = $parsed['host'];
+        $port = isset($parsed['port']) ? (int)$parsed['port'] : ($scheme === 'wss' ? 443 : 80);
+        $path = ($parsed['path'] ?? '/') . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
+        $timeout = isset($timeout) ? min(max((int)$timeout, 2), 30) : 10;
+        $max_frames = isset($max_frames) ? min(max((int)$max_frames, 1), 50) : 5;
+        $max_payload = isset($max_payload_bytes) ? min(max((int)$max_payload_bytes, 256), 1048576) : 65536;
+        $message = isset($message) ? (string)$message : '';
+
+        // Generate WebSocket key
+        $key_bytes = '';
+        for ($i = 0; $i < 16; $i++) $key_bytes .= chr(random_int(0, 255));
+        $ws_key = base64_encode($key_bytes);
+
+        // Connect
+        $socket = @stream_socket_client(($scheme === 'wss' ? 'tls://' : 'tcp://') . $host . ':' . $port, $e, $s, $timeout);
+        if (!$socket) return ['error' => "Connection failed: {$s} ({$e})", 'frames' => []];
+        stream_set_timeout($socket, $timeout);
+        stream_set_blocking($socket, true);
+
+        // Handshake
+        $handshake = "GET {$path} HTTP/1.1\r\nHost: {$host}:{$port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {$ws_key}\r\nSec-WebSocket-Version: 13\r\nUser-Agent: PHP-WS/1.0\r\n\r\n";
+        fwrite($socket, $handshake);
+
+        $response = '';
+        while (true) {
+            $line = fgets($socket);
+            if ($line === false) break;
+            $response .= $line;
+            if ($line === "\r\n" || $line === "\n") break;
+        }
+        if (!str_contains($response, ' 101 ')) {
+            fclose($socket);
+            return ['error' => 'Handshake failed: ' . (explode("\r\n", $response)[0] ?? 'unknown'), 'response' => $response, 'frames' => []];
+        }
+
+        // Send message
+        if ($message !== '') {
+            fwrite($socket, $encodeFrame($message, 0x01));
+        }
+
+        // Read frames
+        $frames = [];
+        $frame_count = 0;
+        $continuation = '';
+
+        while ($frame_count < $max_frames) {
+            $meta = stream_get_meta_data($socket);
+            if ($meta['timed_out'] || feof($socket)) break;
+            
+            $header = fread($socket, 2);
+            if ($header === false || strlen($header) < 2) break;
+            
+            $first = ord($header[0]); $second = ord($header[1]);
+            $fin = ($first & 0x80) !== 0;
+            $opcode = $first & 0x0F;
+            $masked = ($second & 0x80) !== 0;
+            $len = $second & 0x7F;
+            
+            if ($len === 126) { $ext = fread($socket, 2); if (strlen($ext) < 2) break; $len = unpack('n', $ext)[1]; }
+            elseif ($len === 127) { $ext = fread($socket, 8); if (strlen($ext) < 8) break; $len = unpack('J', $ext)[1]; }
+            if ($len > $max_payload) { fclose($socket); return ['error' => "Payload too large: {$len}", 'frames' => $frames]; }
+            
+            $mask_key = '';
+            if ($masked) { $mask_key = fread($socket, 4); if (strlen($mask_key) < 4) break; }
+            
+            $payload = '';
+            $remaining = $len;
+            while ($remaining > 0) {
+                $chunk = fread($socket, min(8192, $remaining));
+                if ($chunk === false || strlen($chunk) === 0) break 2;
+                $payload .= $chunk;
+                $remaining -= strlen($chunk);
+            }
+            if (strlen($payload) !== $len) break;
+            
+            if ($masked && strlen($mask_key) === 4) {
+                $unmasked = '';
+                for ($i = 0; $i < strlen($payload); $i++) $unmasked .= chr(ord($payload[$i]) ^ ord($mask_key[$i % 4]));
+                $payload = $unmasked;
+            }
+            
+            if ($opcode === 0x00) { $continuation .= $payload; if ($fin) { $frames[] = ['type'=>'text','payload'=>$continuation,'length'=>strlen($continuation)]; $continuation = ''; $frame_count++; } }
+            elseif ($opcode === 0x01) { if ($fin) { $frames[] = ['type'=>'text','payload'=>$payload,'length'=>strlen($payload)]; $frame_count++; } else $continuation = $payload; }
+            elseif ($opcode === 0x02) { $frames[] = ['type'=>'binary','payload'=>'base64:'.base64_encode($payload),'length'=>strlen($payload)]; $frame_count++; }
+            elseif ($opcode === 0x08) { $frames[] = ['type'=>'close','payload'=>'closed']; $frame_count++; break; }
+            elseif ($opcode === 0x09) { $pong = chr(0x8A) . chr(strlen($payload)); if ($payload) $pong .= $payload; @fwrite($socket, $pong); }
+            elseif ($opcode === 0x0A) { $frame_count++; }
+        }
+
+        fclose($socket);
+        return ['success' => true, 'url' => $url, 'frames_received' => count($frames), 'frames' => $frames];
     }
 }

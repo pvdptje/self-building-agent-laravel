@@ -13,9 +13,45 @@ $toolDefinition_batch_image_process = array (
       'type' => 'object',
       'properties' => 
       array (
-        'test' => 
+        'mode' => 
         array (
           'type' => 'string',
+          'description' => '\'resize\', \'convert\', \'grayscale\', \'sepia\', \'negative\', \'blur\', \'thumbnail\'',
+        ),
+        'path' => 
+        array (
+          'type' => 'string',
+          'description' => 'File or directory path',
+        ),
+        'width' => 
+        array (
+          'type' => 'integer',
+          'description' => 'Target width',
+        ),
+        'height' => 
+        array (
+          'type' => 'integer',
+          'description' => 'Target height',
+        ),
+        'format' => 
+        array (
+          'type' => 'string',
+          'description' => 'Target format: \'png\',\'jpeg\',\'webp\',\'gif\'',
+        ),
+        'quality' => 
+        array (
+          'type' => 'integer',
+          'description' => 'JPEG/WebP quality 1-100',
+        ),
+        'max_files' => 
+        array (
+          'type' => 'integer',
+          'description' => 'Max files to process',
+        ),
+        'output_dir' => 
+        array (
+          'type' => 'string',
+          'description' => 'Output subdirectory in workspace',
         ),
       ),
     ),
@@ -23,8 +59,131 @@ $toolDefinition_batch_image_process = array (
 );
 
 if (! function_exists('batch_image_process')) {
-    function batch_image_process($test = null)
+    function batch_image_process($mode = null, $path = null, $width = null, $height = null, $format = null, $quality = null, $max_files = null, $output_dir = null)
     {
-        return ['error'=> 'placeholder']; 
+        // Batch image processor - resize, convert, filter images via GD
+        $input_path=isset($path)?(string)$path:'';
+        $operation=isset($mode)?(string)$mode:'resize';
+        $tgt_w=isset($width)?max(1,(int)$width):200;
+        $tgt_h=isset($height)?max(0,(int)$height):200;
+        $format=isset($format)?strtolower((string)$format):'png';
+        $quality=isset($quality)?min(max((int)$quality,1),100):85;
+        $output_dir=isset($output_dir)?(string)$output_dir:'processed';
+        $max_files=isset($max_files)?min(max((int)$max_files,1),100):10;
+
+        if($input_path===''||!extension_loaded('gd'))return['error'=>'Path or GD missing'];
+        $full=realpath($input_path);
+        if(!$full){$pr=realpath(__DIR__.'/../../..');$full=realpath($pr.'/'.$input_path);}
+        if(!$full||!file_exists($full))return['error'=>"Not found: {$input_path}"];
+
+        $rfs=['png','jpeg','jpg','webp','gif','bmp'];
+        $files=[];
+
+        if(is_dir($full)){
+            $di=new RecursiveDirectoryIterator($full,RecursiveDirectoryIterator::SKIP_DOTS);
+            $it=new RecursiveIteratorIterator($di);
+            foreach($it as $item){
+                if($item->isFile()&&count($files)<$max_files){
+                    $e=strtolower($item->getExtension());
+                    if(in_array($e,$rfs))$files[]=$item->getRealPath();
+                }
+            }
+        }else{
+            $e=strtolower(pathinfo($full,PATHINFO_EXTENSION));
+            if(in_array($e,$rfs))$files[]=$full;
+        }
+        if(!$files)return['error'=>'No images found'];
+
+        $ws=realpath(__DIR__.'/../../workspace');
+        $od=$ws.'/'.$output_dir;
+        if(!is_dir($od))@mkdir($od,0755,true);
+
+        $fmt_ext=$format==='jpeg'?'jpg':$format;
+        $results=[];$tp=0;$tbi=0;$tbo=0;$errors=[];
+
+        foreach($files as $ip){
+            try{
+                $ii=@getimagesize($ip);
+                if(!$ii){$errors[]=basename($ip).': invalid';continue;}
+                list($sw,$sh,$st)=$ii;$bn=pathinfo($ip,PATHINFO_FILENAME);$ins=filesize($ip);
+                $si=null;
+                switch($st){
+                    case IMAGETYPE_JPEG:$si=@imagecreatefromjpeg($ip);break;
+                    case IMAGETYPE_PNG:$si=@imagecreatefrompng($ip);break;
+                    case IMAGETYPE_WEBP:$si=@imagecreatefromwebp($ip);break;
+                    case IMAGETYPE_GIF:$si=@imagecreatefromgif($ip);break;
+                    case IMAGETYPE_BMP:$si=@imagecreatefrombmp($ip);break;
+                    default:$errors[]=basename($ip).': type '.$st;continue 2;
+                }
+                if(!$si){$errors[]=basename($ip).': load fail';continue;}
+                $ri=null;
+                
+                switch($operation){
+                    case 'resize':
+                        $tw=$tgt_w>0?$tgt_w:(int)($tgt_h*$sw/$sh);
+                        $th=$tgt_h>0?$tgt_h:(int)($tgt_w*$sh/$sw);
+                        $ratio=min($tw/$sw,$th/$sh);
+                        $rw=(int)($sw*$ratio);$rh=(int)($sh*$ratio);
+                        $ri=imagecreatetruecolor($rw,$rh);
+                        imagecopyresampled($ri,$si,0,0,0,0,$rw,$rh,$sw,$sh);
+                        break;
+                    case 'thumbnail':
+                        $tw=max(1,$tgt_w);$th=max(1,$tgt_h);
+                        $ratio=max($tw/$sw,$th/$sh);
+                        $rw=(int)($sw*$ratio);$rh=(int)($sh*$ratio);
+                        $ti=imagecreatetruecolor($rw,$rh);
+                        imagecopyresampled($ti,$si,0,0,0,0,$rw,$rh,$sw,$sh);
+                        $ri=imagecreatetruecolor($tw,$th);
+                        imagecopy($ri,$ti,0,0,(int)(($rw-$tw)/2),(int)(($rh-$th)/2),$tw,$th);
+                        imagedestroy($ti);
+                        break;
+                    case 'grayscale':
+                        $ri=imagecreatetruecolor($sw,$sh);
+                        imagecopy($ri,$si,0,0,0,0,$sw,$sh);
+                        imagefilter($ri,IMG_FILTER_GRAYSCALE);
+                        break;
+                    case 'sepia':
+                        $ri=imagecreatetruecolor($sw,$sh);
+                        imagecopy($ri,$si,0,0,0,0,$sw,$sh);
+                        imagefilter($ri,IMG_FILTER_GRAYSCALE);
+                        imagefilter($ri,IMG_FILTER_COLORIZE,100,50,0);
+                        break;
+                    case 'negative':
+                        $ri=imagecreatetruecolor($sw,$sh);
+                        imagecopy($ri,$si,0,0,0,0,$sw,$sh);
+                        imagefilter($ri,IMG_FILTER_NEGATE);
+                        break;
+                    case 'blur':
+                        $ri=imagecreatetruecolor($sw,$sh);
+                        imagecopy($ri,$si,0,0,0,0,$sw,$sh);
+                        $bl=max(1,min(5,$tgt_w>0?(int)($tgt_w/100):1));
+                        for($i=0;$i<$bl;$i++)imagefilter($ri,IMG_FILTER_GAUSSIAN_BLUR);
+                        break;
+                    case 'convert':
+                        $ri=imagecreatetruecolor($sw,$sh);
+                        imagecopy($ri,$si,0,0,0,0,$sw,$sh);
+                        break;
+                    default:$errors[]=basename($ip).': unknown op';imagedestroy($si);continue 2;
+                }
+                
+                if($format==='png'){imagealphablending($ri,false);imagesavealpha($ri,true);}
+                $of=$od.'/'.$bn.'_'.$operation.'.'.$fmt_ext;
+                $saved=false;
+                switch($format){
+                    case 'png':$saved=imagepng($ri,$of,min(9,9-(int)($quality/11)));break;
+                    case 'jpeg':case 'jpg':$saved=imagejpeg($ri,$of,$quality);break;
+                    case 'webp':$saved=imagewebp($ri,$of,$quality);break;
+                    case 'gif':$saved=imagegif($ri,$of);break;
+                }
+                $os=$saved?filesize($of):0;
+                $rw2=imagesx($ri);$rh2=imagesy($ri);
+                imagedestroy($ri);imagedestroy($si);
+                if(!$saved){$errors[]=basename($ip).': save fail';continue;}
+                $tp++;$tbi+=$ins;$tbo+=$os;
+                $results[]=['file'=>basename($ip),'op'=>$operation,'in'=>['size'=>$ins,'w'=>$sw,'h'=>$sh],'out'=>['file'=>basename($of),'size'=>$os,'w'=>$rw2,'h'=>$rh2],'ratio'=>$ins>0?round($os/$ins,3):0];
+            }catch(\Throwable$e){$errors[]=basename($ip).': '.$e->getMessage();}
+        }
+
+        return['success'=>$tp>0,'processed'=>$tp,'errors'=>count($errors),'operation'=>$operation,'input_count'=>count($files),'output_dir'=>$output_dir,'bytes_in'=>$tbi,'bytes_out'=>$tbo,'savings_pct'=>$tbi>0?round((1-$tbo/$tbi)*100,1):0,'files'=>$results,'error_details'=>$errors?:null];
     }
 }
