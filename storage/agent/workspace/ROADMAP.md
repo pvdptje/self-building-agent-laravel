@@ -91,9 +91,10 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 70. Depth quantiles — nonparametric distribution
 72. Depth binning — tectonic classification
 73. Emoji sparkline — heat visualization
-74. **Uniform histogram** — data_histogram: ~flat distribution confirms
-    uniform_random generator. First distribution-validation pipeline.
-75. **Monochrome sparkline** — emoji_sparkline (mono): 20-pt uniform random.
-    Byproduct of statistical visualization pipeline.
+75. Monochrome sparkline — uniform visualization
+76. **Exponential moving average** — data_moving_average (EMA): dampens
+    sine wave oscillation. First exponential smoothing pipeline.
+77. **Z-score depth normalization** — data_normalizer (zscore): Fiji=3.57σ,
+    shallows=-0.44σ. Confirms Fiji as statistically extreme (>3σ).
 
-## Final — 75 frontiers. 37 reports. 66 tools. 43 domains. 0 new tools.
+## Final — 77 frontiers. 37 reports. 68 tools. 45 domains. 0 new tools.
