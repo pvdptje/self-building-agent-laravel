@@ -94,3 +94,4 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 44. All 228 tools pass lint. Ecosystem maintained without new tools or overwrites this session.
 45. text_progress_bar re-registered. 228/228 pass. Ecosystem stable.
 46. file_renamer — Batch file renamer (replace/prefix/suffix/case/regex). Preview mode. 229 tools, all pass.
+47. ascii_fractal_generator re-registered (Sierpinski verified). file_renamer created (preview mode, 6 ops).
