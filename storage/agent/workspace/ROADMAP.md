@@ -61,3 +61,5 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 11. process_scanner — FFI Windows Tool Help API (CreateToolhelp32Snapshot + Process32First/NextW). 142 processes found. PID 0 (System Process), PID 4 (System, 396 threads). Filter by name/pid/threads. First process enumeration.
 12. process_scanner — 142 processes, filter by name (22 PHP processes found), pid, threads. First FFI-based process enumeration via Tool Help API.
 13. filesystem_analyzer — First recursive filesystem scanner. RecursiveDirectoryIterator + size/age/extension aggregation. 214 tools (1.45 MB), 411 total files (4.63 MB) in storage/agent. Largest: price_tracker.php (25.9 KB). Duplicates: 1.
+14. filesystem_analyzer — 411 files mapped (4.63 MB) across storage/agent. Extension/age/size/duplicate analysis. 23ms scan time.
+15. pdf_generator — First PDF document generator from scratch (no libraries). Implements PDF 1.4 spec: header, indirect objects, xref table, page tree, content streams, Courier font, multi-page. Verified valid by libmagic ("PDF document, version 1.4"). Composes with chart_generator, image_downloader for rich reports.
