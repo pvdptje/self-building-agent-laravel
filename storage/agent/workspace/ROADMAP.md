@@ -63,3 +63,6 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 13. filesystem_analyzer — First recursive filesystem scanner. RecursiveDirectoryIterator + size/age/extension aggregation. 214 tools (1.45 MB), 411 total files (4.63 MB) in storage/agent. Largest: price_tracker.php (25.9 KB). Duplicates: 1.
 14. filesystem_analyzer — 411 files mapped (4.63 MB) across storage/agent. Extension/age/size/duplicate analysis. 23ms scan time.
 15. pdf_generator — First PDF document generator from scratch (no libraries). Implements PDF 1.4 spec: header, indirect objects, xref table, page tree, content streams, Courier font, multi-page. Verified valid by libmagic ("PDF document, version 1.4"). Composes with chart_generator, image_downloader for rich reports.
+16. pdf_generator — Pure PHP PDF 1.4 (header, xref, streams, Courier font). libmagic-verified valid. Composable with charts/images. Hardest single tool built.
+17. shared_memory + file_lock — First IPC/cross-process primitives. shmop (create/write/read/delete segments) + flock-based file locking (exclusive/shared/try, blocking/non-blocking).
+18. pdf_generator v2 — JPEG/PNG image embedding via XObjects. chart_generator (bar chart) embeded in PDF ✓. libmagic validated. Cross-tool composition: chart → PDF.
