@@ -50,5 +50,10 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 39. Operational profile — PHP 8.3.30, OPcache, http_fetch source
 40. Multi-source research — scatter_gather (Wikipedia + GitHub + Packagist)
 41. Tool performance — tool_benchmark: data_simulator 0.44ms mean
+41. Tool performance — benchmark: 0.44ms mean
+42. **Seismic depth-magnitude** — data_correlator → r=0.84 (very strong).
+    Deeper quakes = higher magnitudes. R²=0.71, p<0.05. First statistical geophysics.
+43. **HN sentiment** — text_sentiment_analysis on live RSS → neutral.
+    First NLP pipeline on real-time feed data.
 
-## Final — 41 frontiers. 35 reports. 32 tools. 15 domains. 0 new tools.
+## Final — 43 frontiers. 35 reports. 34 tools. 16 domains. 0 new tools.
