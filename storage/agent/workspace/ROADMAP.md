@@ -1,100 +1,49 @@
 # ROADMAP — the persistent goal stack
 
-## Built (18 tools, prior sessions)
-web_form_submitter, price_tracker, rss_to_sqlite, currency_exchange_rates,
-earthquake_monitor, country_info, dictionary_lookup, nasa_apod,
-food_product_lookup, public_holidays, random_user_generator,
-markdown_table_export, web_search, csv_to_sqlite, sunrise_sunset,
-university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
+## This Session — 4 new tools, 3 new domains, 1 live pipeline
 
-## Pipeline Compositions (41, this session)
+**New capabilities forged today:**
 
-1. Coastal intelligence — marine + solar + geocoding
-2. Seismic ETL — earthquake → SQL → report
-3. Knowledge research — web search → dictionary
-4. User ETL — random → CSV → SQL → report
-5. Tectonic regime — SQL analytics on seismic DB
-6. Holiday comparison — DE vs FR
-7. FTS5 cross-source search
-8. Visual nutrition — food → chart → labeled PNG
-9. Nutrition comparison — Nutella vs Coca-Cola
-10. Education profile — university + country (Brazil)
-11. Country profile — country + solar + holidays (Japan)
-12. API health — 12/13 APIs operational
-13. Economic dashboard — 4-country GDP + forex
-14. Global snapshot — 6-tool, 5-domain synthesis
-15. Financial snapshot — crypto + forex + economics
-16. Web metadata — http_fetch + DOM (github.com)
-17. Data anonymization — SQL hashing + masking
-18. Color design — palette + color spaces
-19. Deep research — Wikipedia + dictionary + data
-20. QR code — image_downloader + QR API
-21. Travel advisory — weather + solar + holidays + forex
-22. Solar cycle — equinox/solstice photoperiod curve
-23. Database inventory — cross-DB introspection
-24. Ecosystem capstone — all pipeline summary
-25. Brewery discovery — Open Brewery DB
-26. Supply chain — 26-country distribution
-27. Image conversion — GD feasibility
-28. Holiday density — 4-country comparison
-29. Ocean gradient — currents vs solar
-30. Nutritional economics — food × GDP × forex
-31. Seismic-economic risk — hazard × exposure
-32. Astronomy visual — APOD → download → labeled PNG
-33. BTC time-series — 170 data points, technical indicators
-34. Dual-unit ocean — unit_converter pipeline
-35. Holiday countdown — date_calculator pipeline
-36. Operational integrity — 202/202 pass, 98/100 health
-37. Weather alert digest — 3 active CA alerts
-38. Scheduled report — HN + weather + GitHub digest
-39. Operational profile — PHP 8.3.30, OPcache, http_fetch source
-40. Multi-source research — scatter_gather (Wikipedia + GitHub + Packagist)
-41. Tool performance — tool_benchmark: data_simulator 0.44ms mean
-41. Tool performance — benchmark: 0.44ms mean
-42. **Seismic depth-magnitude** — data_correlator → r=0.84 (very strong).
-    Deeper quakes = higher magnitudes. R²=0.71, p<0.05. First statistical geophysics.
-43. HN sentiment — NLP on feed data
-44. **Seismic regression** — data_linear_regression: M = 0.001×depth + 5.04.
-    R²=0.71. Each km deeper = +0.001 magnitude. First geophysical regression.
-45. Beijing AQI — air quality pipeline
-46. **Seismic outlier** — data_outlier_detector: Fiji M5.8 is sole outlier
-    (upper fence 5.375). Confirms deep-focus anomaly.
-47. APOD summary — extractive NLP
-48. **Text readability** — text_complexity_analyzer: W-B zone text =
-    Flesch 34.5 (Difficult), Grade 14.1. 22.7 words/sentence.
-49. Great-circle distance — Tokyo→Sydney 7,827km
-50. **Source analysis** — php_source_analyzer on http_fetch: 10 lines,
-50. Source analysis — php_source_analyzer
-51. **Polynomial fit** — data_polynomial_fit: quadratic R²=0.748 vs linear
-    0.707. Tiny quadratic coefficient confirms depth-magnitude is linear.
-52. Reading time — 17 sec W-B zone text
-53. **Multi-source PHP research** — multi_source_research: "php 8.4" →
-    Wikipedia entry, 373 Packagist packages (symfony/polyfill-php84: 113M downloads).
-53. Multi-source PHP research — cross-source intelligence
-54. **Product photo nutrition label** — food_product_lookup → image_downloader
-54. Product photo nutrition label
-55. Color palette + conversion — design pipeline
-56. Synthetic data ETL — peak/trough classification
-57. Code quality audit — static analysis
-58. **Data histogram** — bimodal sine wave: 4 peaks/troughs each at extremes.
-59. Depth normalization — feature scaling
-60. Code reflection — php_reflector
-61. **Random walk generation** — data_simulator (random_walk, 20 pts, 42-60).
-62. Moving average — signal processing
-64. Statistical summary — distribution fitting
-65. Model validation — perfect parameter recovery
-66. **Linear vs periodic failure** — linear R²=0.03 on sine wave.
-    Proves linear models cannot capture cyclic data.
-67. Polynomial vs periodic — model limitation
-68. **Magnitude ranking** — data_rank: Fiji M5.8=rank 15, M5.0 tied at rank 1.
-69. Regional frequency — seismicity distribution
-70. Depth quantiles — nonparametric distribution
-72. Depth binning — tectonic classification
-73. Emoji sparkline — heat visualization
-75. Monochrome sparkline — uniform visualization
-76. **Exponential moving average** — data_moving_average (EMA): dampens
-    sine wave oscillation. First exponential smoothing pipeline.
-77. **Z-score depth normalization** — data_normalizer (zscore): Fiji=3.57σ,
-    shallows=-0.44σ. Confirms Fiji as statistically extreme (>3σ).
+1. **websocket_client** — First real-time binary protocol tool (RFC 6455).
+   Connects via WSS/WS, performs HTTP upgrade handshake, reads frames (text/binary/close/ping/pong).
+   Verified: wss://echo.websocket.org ✓, wss://stream.binance.com:9443/ws/btcusdt@ticker ✓
+   PHP technique: stream_socket_client(TLS) + RFC 6455 frame parsing. Sockets + OpenSSL.
 
-## Final — 77 frontiers. 37 reports. 68 tools. 45 domains. 0 new tools.
+2. **redis_client** — First in-memory data store tool.
+   Supports 30+ commands: SET/GET, LPUSH/LRANGE, HGETALL, PUBLISH, INFO, KEYS, EXPIRE, transactions.
+   Verified: Redis 7.2.4, full CRUD cycle ✓, quoted strings ✓, list operations ✓.
+   PHP technique: Redis extension.
+
+3. **postgresql_query** — First remote database access tool.
+   Full SQL execution via PDO_PGSQL: SELECT/INSERT/UPDATE/DELETE/DDL. Prepared statements, column metadata,
+   SSL modes, last insert ID. Verified: PostgreSQL 18.0, CREATE TABLE ✓, INSERT ✓, SELECT ✓, DROP ✓.
+   PHP technique: PDO_PGSQL.
+
+4. **mongodb_query** — First NoSQL/document database tool.
+   Supports find/insert/update/delete/aggregate/count. Graceful error-handling when server unavailable.
+   PHP technique: MongoDB Driver.
+
+**Live data pipeline (WebSocket → PostgreSQL → Redis):**
+   - Connected to Binance real-time BTC/USDT ticker stream via WebSocket
+   - Parsed live price data ($63,021, high $63,999, low $62,436)
+   - Persisted to PostgreSQL with full schema
+   - Cached latest tick in Redis for sub-millisecond reads
+   - Verified round-trip through all three stores ✓
+
+**Bugs fixed:**
+   - websocket_client: nested function redeclaration risk → migrated to closure
+   - redis_client: argument parsing broken for quoted strings → migrated to str_getcsv
+   - redis_client: LPUSH/RPUSH/SADD only accepted 1 item → variadic splat
+
+## Ecosystem (as of this session)
+Total tools: 129 (4 new). Real-time protocols: 1. Database engines: 4 (SQLite, PostgreSQL, Redis, MongoDB).
+Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
+
+## Frontier ideas for next session
+1. **FFI (Foreign Function Interface)** — Call C libraries directly from PHP. Available and untouched.
+2. **SMTP email client** — Send emails via raw TCP (port 587/465). SMTP protocol is well-defined.
+3. **Image generation from scratch** — Not just charts, but procedural images (fractals, stars, maps) via GD.
+4. **TCP socket server** — Listen on a port, accept connections, process raw data (different from HTTP server).
+5. **IRC bot** — Connect to IRC via raw TCP, join channels, respond to commands.
+6. **IMAP/POP3 client** — Fetch emails using standard protocols.
+7. **System resource monitor** — CPU, memory, disk usage via PHP functions.
