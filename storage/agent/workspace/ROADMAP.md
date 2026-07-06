@@ -34,9 +34,12 @@ off, and add what you learned + the next step before finishing. When the
 - [x] **Web page metadata extraction** — http_fetch + manual DOM analysis →
 - [x] **Financial snapshot** — crypto_ticker × 2 + forex + country_info →
 - [x] **Data anonymization** — sqlite_query × 3 → bulk anonymization of 5 user
-      records. Names hashed (hex/randomblob), emails masked (j***@example.com).
-      Proves data_anonymizer frontier achievable via SQLite string functions.
+- [x] **Color design analysis** — image_info + color_converter × 4 → palette
+      from Nutella chart. Fat #E74C3C (HSL 5.6°), Carbs #F39C12 (90% saturation),
+      Protein #2ECC71. Color psychology: red/orange for unhealthy macros,
+      green for protein, gray for trace salt. First design/color pipeline.
 
+- [x] 18 frontiers/pipelines. 15 reports in workspace.
 - [x] 17 frontiers/pipelines. 14 reports in workspace.
 
 - [x] 16 frontiers/pipelines. 13 reports in workspace.
