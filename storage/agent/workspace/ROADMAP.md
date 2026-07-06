@@ -36,9 +36,11 @@ off, and add what you learned + the next step before finishing. When the
 - [x] **Data anonymization** — sqlite_query × 3 → bulk anonymization of 5 user
 - [x] **Color design analysis** — image_info + color_converter × 4 → palette
 - [x] **Deep research: Wadati-Benioff zone** — wikipedia_article + dictionary × 2
-      + seismic DB → theory-to-observation pipeline. Wikipedia definition →
-      planar /ˈpleɪnə/, seismicity → Fiji M5.8 at 686km empirical confirmation.
-      First knowledge+lexical+empirical synthesis.
+- [x] **QR code generation** — image_downloader + image_info → QR code via
+      api.qrserver.com. 200×200, 1-bit B&W PNG, 355 bytes, MD5 verified.
+      Encodes github.com URL. First QR code capability via composition.
+
+- [x] 20 frontiers/pipelines. 17 reports/assets in workspace.
 
 - [x] 19 frontiers/pipelines. 16 reports in workspace.
 
