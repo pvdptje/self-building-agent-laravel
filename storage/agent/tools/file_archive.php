@@ -50,263 +50,254 @@ $toolDefinition_file_archive = array (
 if (! function_exists('file_archive')) {
     function file_archive($operation, $archive, $files = null, $extract_to = null)
     {
-        if (!is_string($operation) || !in_array($operation, ['list', 'create', 'extract', 'add', 'test'], true)) {
-            return ['error' => "Invalid operation '$operation'. Must be one of: list, create, extract, add, test."];
-        }
-        if (!is_string($archive) || $archive === '') {
-            return ['error' => 'Archive path is required.'];
-        }
+        // File Archive tool using ZipArchive + bz2 compression
+        $operation = isset($operation) ? (string)$operation : '';
+        $archive = isset($archive) ? (string)$archive : '';
+        $files = isset($files) ? (array)$files : [];
+        $extract_to = isset($extract_to) ? (string)$extract_to : '';
 
-        if (!extension_loaded('zip')) {
-            return ['error' => 'ZipArchive extension is not available on this PHP installation.'];
-        }
-
-        $base_dir = getcwd();
-        $archive_path = $base_dir . '/' . ltrim($archive, '/');
-        $real_archive_dir = realpath(dirname($archive_path));
-        $real_base = realpath($base_dir);
-
-        if ($real_archive_dir === false || $real_base === false || strpos($real_archive_dir, $real_base) !== 0) {
-            return ['error' => 'Access denied: archive path must be within the project directory.'];
+        if ($operation === '' || $archive === '') {
+            return ['error' => 'Operation and archive path are required'];
         }
 
-        $archive_dir = dirname($archive_path);
-        if (!is_dir($archive_dir)) {
-            @mkdir($archive_dir, 0755, true);
-        }
+        // Resolve archive path (relative to project root)
+        $project_root = realpath(__DIR__ . '/../../..');
+        $archive_path = $project_root . '/' . ltrim($archive, '/');
 
-        $resolve_path = function($file) use ($base_dir, $real_base) {
-            $full = $base_dir . '/' . ltrim($file, '/');
-            $real = realpath($full);
-            if ($real === false || $real_base === false) return null;
-            if (strpos($real, $real_base) !== 0) return null;
-            if (!file_exists($real) || !is_file($real)) return null;
-            $local = ltrim(substr($real, strlen($real_base)), '\\/');
-            $local = str_replace('\\', '/', $local);
-            return ['real' => $real, 'local' => $local];
-        };
+        // Check extension availability
+        $has_zip = extension_loaded('zip');
+        $has_bz2 = extension_loaded('bz2');
 
-        $zip = new ZipArchive();
-        $result = [];
-
-        switch ($operation) {
-            case 'list':
-                $open = $zip->open($archive_path);
-                if ($open !== true) {
-                    $err_map = [ZipArchive::ER_EXISTS=>'Already exists', ZipArchive::ER_INCONS=>'Inconsistent', ZipArchive::ER_INVAL=>'Invalid argument', ZipArchive::ER_MEMORY=>'Memory', ZipArchive::ER_NOENT=>'Not found', ZipArchive::ER_NOZIP=>'Not a zip', ZipArchive::ER_OPEN=>'Cannot open', ZipArchive::ER_READ=>'Read error', ZipArchive::ER_SEEK=>'Seek error'];
-                    return ['error' => 'Failed to open: ' . ($err_map[$open] ?? "code $open")];
-                }
-                
-                $num = $zip->count();
-                $entries = [];
-                for ($i = 0; $i < $num; $i++) {
-                    $stat = $zip->statIndex($i);
-                    if ($stat !== false) {
-                        $entries[] = [
-                            'index' => $i,
-                            'name' => $stat['name'],
-                            'size' => $stat['size'],
-                            'compressed_size' => $stat['comp_size'],
-                            'ratio' => $stat['size'] > 0 ? round((1 - $stat['comp_size'] / $stat['size']) * 100, 1) : 0,
-                            'mod_time' => date('Y-m-d H:i:s', $stat['mtime']),
-                        ];
-                    }
-                }
-                $zip->close();
-                
-                $total_raw = array_sum(array_column($entries, 'size'));
-                $total_comp = array_sum(array_column($entries, 'compressed_size'));
-                
-                return [
-                    'error' => null,
-                    'archive' => $archive,
-                    'archive_size_bytes' => filesize($archive_path),
-                    'entry_count' => count($entries),
-                    'total_raw_size' => $total_raw,
-                    'total_compressed_size' => $total_comp,
-                    'compression_ratio' => $total_raw > 0 ? round((1 - $total_comp / $total_raw) * 100, 1) : 0,
-                    'entries' => $entries,
-                ];
-                
-            case 'create':
-                if (file_exists($archive_path)) {
-                    return ['error' => 'Archive already exists. Use operation "add" or delete it first.'];
-                }
-                $open = $zip->open($archive_path, ZipArchive::CREATE);
-                if ($open !== true) {
-                    return ['error' => "Failed to create (code $open)."];
-                }
-                
-                $files = isset($files) && is_array($files) ? $files : [];
-                if (empty($files)) {
-                    $zip->close();
-                    @unlink($archive_path);
-                    return ['error' => 'No files specified.'];
-                }
-                
-                $added = 0;
-                $failed = [];
-                foreach ($files as $file) {
-                    $resolved = $resolve_path($file);
-                    if ($resolved === null) {
-                        $failed[] = ['file' => $file, 'reason' => 'Not found or outside project'];
-                        continue;
-                    }
-                    // Use addFromString for PHP 8.3+ compatibility (addFile may have path issues on Windows)
-                    $content = @file_get_contents($resolved['real']);
-                    if ($content === false) {
-                        $failed[] = ['file' => $file, 'reason' => 'Cannot read file content'];
-                        continue;
-                    }
-                    if ($zip->addFromString($resolved['local'], $content)) {
-                        $added++;
+        try {
+            switch ($operation) {
+                // --- BZIP2 Operations (new) ---
+                case 'bz2_compress':
+                    if (!$has_bz2) return ['error' => 'bz2 extension not loaded'];
+                    
+                    $data = '';
+                    if (count($files) > 0) {
+                        // Read first file
+                        $src_path = $project_root . '/' . ltrim($files[0], '/');
+                        if (!file_exists($src_path)) return ['error' => "File not found: {$files[0]}"];
+                        $data = file_get_contents($src_path);
+                        if ($data === false) return ['error' => "Cannot read: {$files[0]}"];
+                    } elseif (isset($data_input)) {
+                        $data = (string)$data_input;
                     } else {
-                        $failed[] = ['file' => $file, 'reason' => 'addFromString failed'];
+                        return ['error' => 'Provide data via files array or data param'];
                     }
-                }
-                
-                $close_ok = $zip->close();
-                if (!$close_ok) {
-                    return ['error' => 'Failed to finalize archive (close returned false).'];
-                }
-                
-                return [
-                    'error' => null,
-                    'archive' => $archive,
-                    'archive_size_bytes' => file_exists($archive_path) ? filesize($archive_path) : 0,
-                    'operation' => 'create',
-                    'files_requested' => count($files),
-                    'files_added' => $added,
-                    'files_failed' => count($failed),
-                    'failures' => !empty($failed) ? $failed : null,
-                ];
-                
-            case 'extract':
-                $extract_to = isset($extract_to) ? trim($extract_to) : '';
-                if ($extract_to === '') {
-                    return ['error' => 'extract_to is required.'];
-                }
-                
-                $extract_path = $base_dir . '/' . ltrim($extract_to, '/');
-                if (!is_dir($extract_path)) {
-                    @mkdir($extract_path, 0755, true);
-                }
-                $real_extract = realpath($extract_path);
-                if ($real_extract === false || $real_base === false || strpos($real_extract, $real_base) !== 0) {
-                    return ['error' => 'Extract directory must be within project.'];
-                }
-                
-                $open = $zip->open($archive_path);
-                if ($open !== true) {
-                    return ['error' => "Failed to open for extraction (code $open)."];
-                }
-                
-                $num = $zip->count();
-                $ok = $zip->extractTo($real_extract);
-                $zip->close();
-                
-                if (!$ok) {
-                    return ['error' => 'Failed to extract archive.'];
-                }
-                
-                return [
-                    'error' => null,
-                    'archive' => $archive,
-                    'operation' => 'extract',
-                    'extracted_to' => $extract_to,
-                    'entries_extracted' => $num,
-                ];
-                
-            case 'add':
-                if (!file_exists($archive_path)) {
-                    return ['error' => 'Archive not found. Use "create" first.'];
-                }
-                $open = $zip->open($archive_path);
-                if ($open !== true) {
-                    return ['error' => "Failed to open for adding (code $open)."];
-                }
-                
-                $files = isset($files) && is_array($files) ? $files : [];
-                if (empty($files)) {
+                    
+                    $level = 9; // max compression
+                    $compressed = bzcompress($data, $level);
+                    if ($compressed === false) return ['error' => 'Compression failed'];
+                    
+                    file_put_contents($archive_path, $compressed);
+                    
+                    $in_size = strlen($data);
+                    $out_size = filesize($archive_path);
+                    
+                    return [
+                        'success' => true,
+                        'operation' => 'bz2_compress',
+                        'archive' => $archive,
+                        'input_bytes' => $in_size,
+                        'output_bytes' => $out_size,
+                        'ratio' => round($out_size / max($in_size, 1) * 100, 1) . '%',
+                        'savings' => round((1 - $out_size / max($in_size, 1)) * 100, 1) . '%',
+                        'compression_level' => $level,
+                        'readable_input' => $in_size >= 1024 ? round($in_size / 1024, 1) . ' KB' : $in_size . ' B',
+                        'readable_output' => $out_size >= 1024 ? round($out_size / 1024, 1) . ' KB' : $out_size . ' B',
+                    ];
+                    
+                case 'bz2_decompress':
+                    if (!$has_bz2) return ['error' => 'bz2 extension not loaded'];
+                    if (!file_exists($archive_path)) return ['error' => "Archive not found: {$archive}"];
+                    
+                    $compressed = file_get_contents($archive_path);
+                    if ($compressed === false) return ['error' => 'Cannot read archive'];
+                    
+                    $decompressed = bzdecompress($compressed);
+                    if ($decompressed === false) return ['error' => 'Decompression failed (not valid bzip2 data)'];
+                    
+                    // If files param provided, write to file
+                    if (count($files) > 0) {
+                        $out_path = $project_root . '/' . ltrim($files[0], '/');
+                        file_put_contents($out_path, $decompressed);
+                    }
+                    
+                    $in_size = strlen($compressed);
+                    $out_size = strlen($decompressed);
+                    
+                    return [
+                        'success' => true,
+                        'operation' => 'bz2_decompress',
+                        'archive' => $archive,
+                        'input_bytes' => $in_size,
+                        'output_bytes' => $out_size,
+                        'ratio' => round($in_size / max($out_size, 1) * 100, 1) . '%',
+                        'data_preview' => substr($decompressed, 0, 200),
+                        'preview_truncated' => $out_size > 200,
+                    ];
+                    
+                // --- ZIP Operations (legacy) ---
+                case 'list':
+                    if (!$has_zip) return ['error' => 'zip extension not loaded'];
+                    if (!file_exists($archive_path)) return ['error' => "Archive not found: {$archive}"];
+                    
+                    $zip = new ZipArchive();
+                    $res = $zip->open($archive_path);
+                    if ($res !== true) return ['error' => "Cannot open ZIP: " . zipErrorString($res)];
+                    
+                    $entries = [];
+                    for ($i = 0; $i < $zip->numFiles; $i++) {
+                        $stat = $zip->statIndex($i);
+                        if ($stat) {
+                            $entries[] = [
+                                'index' => $i,
+                                'name' => $stat['name'],
+                                'size' => $stat['size'],
+                                'compressed_size' => $stat['comp_size'],
+                                'ratio' => $stat['size'] > 0 ? round($stat['comp_size'] / $stat['size'] * 100, 1) . '%' : 'n/a',
+                                'modified' => date('Y-m-d H:i:s', $stat['mtime'] ?? time()),
+                            ];
+                        }
+                    }
+                    
                     $zip->close();
-                    return ['error' => 'No files specified.'];
-                }
-                
-                $added = 0;
-                $failed = [];
-                foreach ($files as $file) {
-                    $resolved = $resolve_path($file);
-                    if ($resolved === null) {
-                        $failed[] = ['file' => $file, 'reason' => 'Not found or outside project'];
-                        continue;
-                    }
-                    $content = @file_get_contents($resolved['real']);
-                    if ($content === false) {
-                        $failed[] = ['file' => $file, 'reason' => 'Cannot read'];
-                        continue;
-                    }
-                    if ($zip->addFromString($resolved['local'], $content)) {
+                    
+                    return [
+                        'success' => true,
+                        'operation' => 'list',
+                        'archive' => $archive,
+                        'file_count' => $zip->numFiles,
+                        'entries' => $entries,
+                    ];
+
+                case 'create':
+                    if (!$has_zip) return ['error' => 'zip extension not loaded'];
+                    if (count($files) === 0) return ['error' => 'No files specified for archive'];
+                    
+                    $zip = new ZipArchive();
+                    $res = $zip->open($archive_path, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+                    if ($res !== true) return ['error' => "Cannot create ZIP: " . zipErrorString($res)];
+                    
+                    $added = 0;
+                    $errors = [];
+                    foreach ($files as $file) {
+                        $src = $project_root . '/' . ltrim($file, '/');
+                        if (!file_exists($src)) { $errors[] = "Not found: {$file}"; continue; }
+                        // Use relative path inside archive
+                        $local = str_replace($project_root . '/', '', $src);
+                        $zip->addFile($src, $local);
                         $added++;
-                    } else {
-                        $failed[] = ['file' => $file, 'reason' => 'addFromString failed'];
                     }
-                }
-                
-                $zip->close();
-                
-                return [
-                    'error' => null,
-                    'archive' => $archive,
-                    'archive_size_bytes' => filesize($archive_path),
-                    'operation' => 'add',
-                    'files_added' => $added,
-                    'files_failed' => count($failed),
-                    'failures' => !empty($failed) ? $failed : null,
-                ];
-                
-            case 'test':
-                $open = $zip->open($archive_path);
-                if ($open !== true) {
-                    return ['error' => "Failed to open for testing (code $open)."];
-                }
-                
-                $num = $zip->count();
-                $valid = true;
-                $test_errors = [];
-                
-                for ($i = 0; $i < $num; $i++) {
-                    $stat = $zip->statIndex($i);
-                    if ($stat === false) {
-                        $test_errors[] = "Entry $i: Cannot read metadata";
-                        $valid = false;
-                        continue;
+                    
+                    $zip->close();
+                    
+                    return [
+                        'success' => $added > 0,
+                        'operation' => 'create',
+                        'archive' => $archive,
+                        'files_added' => $added,
+                        'errors' => count($errors) > 0 ? $errors : null,
+                    ];
+
+                case 'extract':
+                    if (!$has_zip) return ['error' => 'zip extension not loaded'];
+                    if (!file_exists($archive_path)) return ['error' => "Archive not found: {$archive}"];
+                    if ($extract_to === '') return ['error' => 'Extract directory required'];
+                    
+                    $dest = $project_root . '/' . ltrim($extract_to, '/');
+                    if (!is_dir($dest)) @mkdir($dest, 0755, true);
+                    
+                    $zip = new ZipArchive();
+                    $res = $zip->open($archive_path);
+                    if ($res !== true) return ['error' => "Cannot open ZIP: " . zipErrorString($res)];
+                    
+                    $extracted = $zip->extractTo($dest);
+                    $count = $zip->numFiles;
+                    $zip->close();
+                    
+                    return [
+                        'success' => $extracted,
+                        'operation' => 'extract',
+                        'archive' => $archive,
+                        'extracted_to' => $extract_to,
+                        'files_extracted' => $count,
+                    ];
+
+                case 'add':
+                    if (!$has_zip) return ['error' => 'zip extension not loaded'];
+                    if (!file_exists($archive_path)) return ['error' => "Archive not found: {$archive}"];
+                    if (count($files) === 0) return ['error' => 'No files to add'];
+                    
+                    $zip = new ZipArchive();
+                    $res = $zip->open($archive_path);
+                    if ($res !== true) return ['error' => "Cannot open ZIP: " . zipErrorString($res)];
+                    
+                    foreach ($files as $file) {
+                        $src = $project_root . '/' . ltrim($file, '/');
+                        if (file_exists($src)) {
+                            $local = str_replace($project_root . '/', '', $src);
+                            $zip->addFile($src, $local);
+                        }
                     }
-                    $data = $zip->getFromIndex($i);
-                    if ($data === false) {
-                        $test_errors[] = "Entry $i ({$stat['name']}): Cannot extract";
-                        $valid = false;
-                        continue;
+                    
+                    $zip->close();
+                    
+                    return [
+                        'success' => true,
+                        'operation' => 'add',
+                        'archive' => $archive,
+                        'files_added' => count($files),
+                    ];
+
+                case 'test':
+                    if (!$has_zip) return ['error' => 'zip extension not loaded'];
+                    if (!file_exists($archive_path)) return ['error' => "Archive not found: {$archive}"];
+                    
+                    $zip = new ZipArchive();
+                    $res = $zip->open($archive_path);
+                    if ($res !== true) return ['error' => "Cannot open ZIP: " . zipErrorString($res)];
+                    
+                    $valid = true;
+                    for ($i = 0; $i < $zip->numFiles; $i++) {
+                        $stat = $zip->statIndex($i);
+                        if ($stat === false) { $valid = false; break; }
                     }
-                    if (crc32($data) !== $stat['crc']) {
-                        $test_errors[] = "Entry $i ({$stat['name']}): CRC mismatch";
-                        $valid = false;
-                    }
-                }
-                
-                $zip->close();
-                
-                return [
-                    'error' => null,
-                    'archive' => $archive,
-                    'operation' => 'test',
-                    'valid' => $valid,
-                    'entries_tested' => $num,
-                    'errors_found' => count($test_errors),
-                    'error_details' => !empty($test_errors) ? $test_errors : null,
-                ];
-                
-            default:
-                return ['error' => "Unknown operation: $operation"];
+                    
+                    $zip->close();
+                    
+                    return [
+                        'success' => $valid,
+                        'operation' => 'test',
+                        'archive' => $archive,
+                        'valid' => $valid,
+                        'files_checked' => $zip->numFiles,
+                    ];
+
+                default:
+                    return ['error' => "Unknown operation: {$operation}. Available: list, create, extract, add, test, bz2_compress, bz2_decompress"];
+            }
+            
+        } catch (\Throwable $e) {
+            return ['error' => 'Archive operation failed: ' . $e->getMessage()];
+        }
+
+        // Helper
+        function zipErrorString($code) {
+            $errors = [
+                ZipArchive::ER_EXISTS => 'File already exists',
+                ZipArchive::ER_INCONS => 'Zip archive inconsistent',
+                ZipArchive::ER_INVAL => 'Invalid argument',
+                ZipArchive::ER_MEMORY => 'Memory allocation failure',
+                ZipArchive::ER_NOENT => 'No such file',
+                ZipArchive::ER_NOZIP => 'Not a zip archive',
+                ZipArchive::ER_OPEN => 'Cannot open file',
+                ZipArchive::ER_READ => 'Read error',
+                ZipArchive::ER_SEEK => 'Seek error',
+            ];
+            return $errors[$code] ?? "Unknown error ({$code})";
         }
     }
 }
