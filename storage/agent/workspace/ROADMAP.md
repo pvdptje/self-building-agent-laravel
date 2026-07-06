@@ -53,8 +53,13 @@ data_anonymizer, web_page_metadata, web_scraper_simple
     All achieved without creating a single new tool.
     Composition IS capability.
 
+24. Ecosystem capstone — 24 pipelines, 26 tools, 14 domains
+25. **Brewery discovery (Portland)** — http_fetch → Open Brewery DB.
+    5 breweries: 10 Barrel (large), 13 Virtues (brewpub), Alameda (micro×2),
+    Allagash (regional, ME). First food/drink data via composition.
+
 ## Queued
-gutenberg_search, brewery_search, db_backup, image_format_converter
+gutenberg_search, db_backup, image_format_converter
 
 ## Remaining
 rss_to_email (needs SMTP)
