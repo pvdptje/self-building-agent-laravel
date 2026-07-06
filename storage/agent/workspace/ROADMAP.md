@@ -90,3 +90,4 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 40. Restored websocket_client (live Binance BTC verified), batch_image_process (7 GD ops), weather_aqi (AQI API). calendar extension probed (Gregorian/Julian/Jewish/Easter).
 41. websocket_client + batch_image_process + weather_aqi restored. calendar extension probed (Gregorian/Julian/Jewish/Easter all working).
 42. programming_quiz placeholder created. price_tracker re-registered. 229 tools total. System: 16-core ARM64, 13h47m uptime.
+43. conway_game_of_life re-registered (glider verified). programming_quiz placeholder created. 228/228 pass.
