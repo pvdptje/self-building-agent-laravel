@@ -90,7 +90,10 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 69. Regional frequency — seismicity distribution
 70. Depth quantiles — nonparametric distribution
 72. Depth binning — tectonic classification
-73. **Emoji sparkline** — emoji_sparkline on sine wave: compact 8-level
-    heat visualization. Byproduct of statistical→visual pipeline.
+73. Emoji sparkline — heat visualization
+74. **Uniform histogram** — data_histogram: ~flat distribution confirms
+    uniform_random generator. First distribution-validation pipeline.
+75. **Monochrome sparkline** — emoji_sparkline (mono): 20-pt uniform random.
+    Byproduct of statistical visualization pipeline.
 
-## Final — 73 frontiers. 37 reports. 64 tools. 41 domains. 0 new tools.
+## Final — 75 frontiers. 37 reports. 66 tools. 43 domains. 0 new tools.
