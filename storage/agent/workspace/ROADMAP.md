@@ -75,7 +75,10 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 54. Product photo nutrition label
 55. Color palette + conversion — design pipeline
 56. Synthetic data ETL — peak/trough classification
-57. **Code quality audit** — tool_defect_detector on http_fetch: 1 finding
-    (INFO: @ suppression, intentional). First static analysis pipeline.
+57. Code quality audit — static analysis
+58. **Data histogram** — bimodal sine wave: 4 peaks/troughs each at extremes.
+    First statistical visualization pipeline.
+59. **Depth normalization** — data_normalizer: Fiji 686km→1.0, shallows→0.0.
+    First feature-scaling geophysics pipeline.
 
-## Final — 57 frontiers. 37 reports. 49 tools. 26 domains. 0 new tools.
+## Final — 59 frontiers. 37 reports. 51 tools. 28 domains. 0 new tools.
