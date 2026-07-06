@@ -6,12 +6,18 @@ use Symfony\Component\Process\Process;
 
 class ToolMaker
 {
+    /** Functions that execute shell commands or arbitrary code. */
+    private const SHELL_FUNCTIONS = ['exec', 'shell_exec', 'system', 'passthru', 'proc_open', 'popen', 'pcntl_exec', 'eval'];
+
     /**
      * @param array<int, string> $builtInNames
+     * @param bool $allowShellFunctions Whether generated tools may call shell/eval
+     *        primitives. Host-enforced per mode; see config('agent.modes').
      */
     public function __construct(
         private string $generatedToolsPath,
         private array $builtInNames,
+        private bool $allowShellFunctions = false,
     ) {
     }
 
@@ -81,6 +87,18 @@ class ToolMaker
 
         if (str_contains($code, '<?php') || str_contains($code, '<?=')) {
             $errors[] = 'Tool code must be a function body only, without a <?php tag.';
+        }
+
+        if (! $this->allowShellFunctions) {
+            foreach (self::SHELL_FUNCTIONS as $function) {
+                if (preg_match('/\b'.$function.'\s*\(/i', $code)) {
+                    $errors[] = "Tool code calls {$function}(), which is blocked in this mode. Solve it with pure PHP instead.";
+                }
+            }
+
+            if (str_contains($code, '`')) {
+                $errors[] = 'Tool code contains a backtick (shell execution operator), which is blocked in this mode.';
+            }
         }
 
         foreach (array_keys($schema['properties'] ?? []) as $property) {

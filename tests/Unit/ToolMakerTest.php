@@ -30,10 +30,24 @@ it('rejects overwriting a built-in tool', function () {
     expect(implode(' ', $errors))->toContain('built-in');
 });
 
-it('allows shell execution functions, eval, and backticks in generated tools', function (string $code) {
+it('blocks shell execution functions, eval, and backticks unless the mode allows them', function (string $code) {
     $errors = $this->maker->validate('some_tool', [], $code);
 
-    expect($errors)->toBe([]);
+    expect(implode(' ', $errors))->toContain('blocked in this mode');
+})->with([
+    'return exec("ls");',
+    'return shell_exec("ls");',
+    'system("ls"); return 1;',
+    'return passthru("ls");',
+    'return proc_open("ls", [], $pipes);',
+    'return eval("1;");',
+    'return `ls`;',
+]);
+
+it('allows shell execution functions, eval, and backticks when the mode permits them', function (string $code) {
+    $maker = new ToolMaker($this->dir, $this->builtIns, allowShellFunctions: true);
+
+    expect($maker->validate('some_tool', [], $code))->toBe([]);
 })->with([
     'return exec("ls");',
     'return shell_exec("ls");',
@@ -42,6 +56,10 @@ it('allows shell execution functions, eval, and backticks in generated tools', f
     'return eval("1;");',
     'return `ls`;',
 ]);
+
+it('does not flag substrings that merely resemble shell function names', function () {
+    expect($this->maker->validate('some_tool', [], 'return $systemInfo . my_exec_helper($x);'))->toBe([]);
+});
 
 it('rejects php open tags in code', function () {
     expect($this->maker->validate('some_tool', [], '<?php return 1;'))->not->toBe([]);

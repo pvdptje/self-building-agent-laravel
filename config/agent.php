@@ -20,9 +20,10 @@ return [
 
     // Used when agent:run is started with --forever and no task argument.
     'autonomous_seed_task' => 'Your mission: build the best agentic toolkit that has ever existed in PHP — for yourself. Read storage/agent/workspace/ROADMAP.md first (create it if missing) and take the top item. Everything PHP can do, you can do: HTTP requests, public APIs, HTML parsing, subprocesses. Prefer the boldest step you can verify.',
-    'autonomous_continue_message' => 'Continue the mission. Update ROADMAP.md with what you just accomplished, then take the next item — the boldest step you can verify with a real tool call. Attempt at least one thing the ecosystem has never done before. Do not add novelty/text-art tools unless they are a byproduct of a genuinely new capability.',
+    'autonomous_continue_message' => 'Continue the mission. Append one short line to ROADMAP.md for what you just accomplished (append-only: never renumber, rewrite, or reformat old entries), then take the next item — the boldest step you can verify with a real tool call. Attempt at least one thing the ecosystem has never done before. Do not add novelty/text-art tools, and if your recent steps only edited workspace notes or re-ran existing tools, the next step must create or improve a tool or reach something new outside.',
 
-    // Safety fuses.
+    // Safety fuses. In an open-ended (--forever) run these are per-segment
+    // budgets: they refresh at every checkpoint instead of starving the run.
     'max_prompt_switches_per_run' => 10,
     'max_tools_created_per_run' => 25,
 
@@ -69,7 +70,7 @@ return [
     'providers' => [
         'deepseek' => [
             'base_url' => 'https://api.deepseek.com/v1',
-            'model' => env('DEEPSEEK_MODEL', 'deepseek-v4-pro'),
+            'model' => env('DEEPSEEK_MODEL', 'deepseek-v4-flash'),
             'api_key' => env('DEEPSEEK_API_KEY'),
             'context_window_tokens' => (int) env('DEEPSEEK_CONTEXT_WINDOW_TOKENS', 1_000_000),
             'history_compress_ratio' => (float) env('DEEPSEEK_HISTORY_COMPRESS_RATIO', 0.75),
@@ -92,6 +93,7 @@ return [
             'allow_make_tool' => true,
             'require_human_approval_for_new_tools' => true,
             'allow_spawn_subagent' => true,
+            'allow_shell_in_tools' => false,
         ],
         'supervised_weird' => [
             'allow_self_modify_system_prompt' => true,
@@ -99,6 +101,7 @@ return [
             'allow_make_tool' => true,
             'require_human_approval_for_new_tools' => true,
             'allow_spawn_subagent' => true,
+            'allow_shell_in_tools' => false,
         ],
         'madness' => [
             'allow_self_modify_system_prompt' => true,
@@ -106,6 +109,10 @@ return [
             'allow_make_tool' => true,
             'require_human_approval_for_new_tools' => false,
             'allow_spawn_subagent' => true,
+            // Generated tools may call exec/shell_exec/system/proc_open/eval.
+            // Deliberate: madness mode trades safety for capability. Flip to
+            // false (or AGENT_ALLOW_SHELL_TOOLS=false) to lock it down.
+            'allow_shell_in_tools' => env('AGENT_ALLOW_SHELL_TOOLS', true),
         ],
     ],
 

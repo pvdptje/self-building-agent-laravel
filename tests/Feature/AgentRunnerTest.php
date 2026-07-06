@@ -26,7 +26,7 @@ function fakeAssistantText(string $text): array
     return ['choices' => [['message' => ['role' => 'assistant', 'content' => $text]]]];
 }
 
-function makeRunner(string $mode, array $modeConfig, bool $approve, string $workDir, array $extraLimits = [], ?Closure $spawnSubagent = null): AgentRunner
+function makeRunner(string $mode, array $modeConfig, bool $approve, string $workDir, array $extraLimits = [], ?Closure $spawnSubagent = null, ?Closure $checkpoint = null): AgentRunner
 {
     $promptsDir = $workDir.'/prompts';
     $toolsDir = $workDir.'/tools';
@@ -53,6 +53,7 @@ function makeRunner(string $mode, array $modeConfig, bool $approve, string $work
         approve: fn (string $question) => $approve,
         output: fn (string $type, string $message) => null,
         spawnSubagent: $spawnSubagent,
+        checkpoint: $checkpoint,
     );
 }
 
@@ -446,6 +447,117 @@ it('keeps going after assistant text in open-ended mode', function () {
     Http::assertSent(function ($request) {
         foreach ($request->data()['messages'] ?? [] as $message) {
             if (($message['role'] ?? '') === 'user' && str_contains($message['content'] ?? '', 'Continue the open-ended experiment')) {
+                return true;
+            }
+        }
+
+        return false;
+    });
+});
+
+it('survives a provider context overflow by emergency-truncating the history', function () {
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(['error' => ['message' => "This model's maximum context length is 131072 tokens. However, you requested 180000 tokens. Please reduce the length of the messages."]], 400)
+        ->push(fakeAssistantText('recovered')),
+    ]);
+
+    $runner = makeRunner('sane', [
+        'allow_self_modify_system_prompt' => false,
+        'require_human_approval_for_prompt_switch' => true,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => true,
+    ], approve: false, workDir: $this->workDir);
+
+    $answer = $runner->run('Keep working.', 'creative_experiment', 3);
+
+    expect($answer)->toBe('recovered');
+
+    // The retried request must carry the bridge message instead of dying.
+    Http::assertSent(function ($request) {
+        foreach ($request->data()['messages'] ?? [] as $message) {
+            if (($message['role'] ?? '') === 'user' && str_contains($message['content'] ?? '', 'Emergency context truncation')) {
+                return true;
+            }
+        }
+
+        return false;
+    });
+});
+
+it('refreshes the tool creation budget at an open-ended checkpoint', function () {
+    $first = 'budget_a_'.uniqid();
+    $second = 'budget_b_'.uniqid();
+    $third = 'budget_c_'.uniqid();
+
+    $makeToolCall = fn (string $name) => fakeAssistantToolCall('make_tool', [
+        'name' => $name,
+        'description' => 'Return one.',
+        'parameters_schema' => ['type' => 'object', 'properties' => (object) []],
+        'code' => 'return 1;',
+    ]);
+
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push($makeToolCall($first))     // budget of 1 spent
+        ->push($makeToolCall($second))    // refused by the fuse
+        ->push(fakeAssistantText('resting'))  // checkpoint → budget refreshes
+        ->push($makeToolCall($third))     // works again
+        ->push(fakeAssistantText('done')),
+    ]);
+
+    $checkpoints = [];
+
+    $runner = makeRunner('madness', [
+        'allow_self_modify_system_prompt' => true,
+        'require_human_approval_for_prompt_switch' => false,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => false,
+    ], approve: false, workDir: $this->workDir,
+        extraLimits: ['max_tools_created_per_run' => 1],
+        checkpoint: function (int $iteration) use (&$checkpoints): ?string {
+            $checkpoints[] = $iteration;
+
+            return null;
+        });
+
+    $answer = $runner->run('Build tools forever.', 'creative_experiment', 5, openEnded: true);
+
+    expect($answer)->toBe('done')
+        ->and(is_file($this->workDir.'/tools/'.$first.'.php'))->toBeTrue()
+        ->and(is_file($this->workDir.'/tools/'.$second.'.php'))->toBeFalse()
+        ->and(is_file($this->workDir.'/tools/'.$third.'.php'))->toBeTrue()
+        ->and($checkpoints)->toBe([3, 5]);
+
+    // The refusal must tell the agent the budget comes back at a checkpoint.
+    Http::assertSent(function ($request) {
+        foreach ($request->data()['messages'] ?? [] as $message) {
+            if (($message['role'] ?? '') === 'tool' && str_contains($message['content'] ?? '', 'refreshes at the next checkpoint')) {
+                return true;
+            }
+        }
+
+        return false;
+    });
+});
+
+it('appends the checkpoint note to the open-ended continue message', function () {
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(fakeAssistantText('journal: polished the roadmap again'))
+        ->push(fakeAssistantText('journal: built something real')),
+    ]);
+
+    $runner = makeRunner('madness', [
+        'allow_self_modify_system_prompt' => true,
+        'require_human_approval_for_prompt_switch' => false,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => false,
+    ], approve: false, workDir: $this->workDir,
+        checkpoint: fn (int $iteration): ?string => 'Stagnation warning: stop editing notes and build a tool.');
+
+    $runner->run('Go.', 'creative_experiment', 2, openEnded: true);
+
+    Http::assertSent(function ($request) {
+        foreach ($request->data()['messages'] ?? [] as $message) {
+            if (($message['role'] ?? '') === 'user' && str_contains($message['content'] ?? '', '[Host] Stagnation warning: stop editing notes')) {
                 return true;
             }
         }

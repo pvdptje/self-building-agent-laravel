@@ -18,13 +18,21 @@ class AgentRunner
 
     private ?array $pendingPrompt = null;
 
+    private bool $openEnded = false;
+
+    /**
+     * Learned after a provider context overflow: compress well before the size
+     * that actually failed, since the configured window estimate proved wrong.
+     */
+    private ?int $learnedCompressChars = null;
+
     /**
      * @param array{allow_self_modify_system_prompt: bool, require_human_approval_for_prompt_switch: bool, allow_make_tool: bool, require_human_approval_for_new_tools: bool, allow_spawn_subagent?: bool} $modeConfig
      * @param array{max_prompt_switches_per_run: int, max_tools_created_per_run: int, autonomous_continue_message?: string, history_compress_chars?: ?int, max_tool_result_chars?: int, max_subagents_per_run?: int} $limits
      * @param Closure(string): bool $approve Ask the human a yes/no question.
      * @param Closure(string, string): void $output Report progress to the human as (type, message). Types: iteration, thought, tool_call, tool_result, proposal, switch, system.
      * @param Closure(string): array{answer?: string, error?: string}|null $spawnSubagent Run a subtask in a separate process and return its answer.
-     * @param Closure(int): void|null $checkpoint Snapshot the work so far (e.g. a git commit). Called at each open-ended nudge with the current iteration.
+     * @param Closure(int): ?string $checkpoint Snapshot the work so far (e.g. a git commit). Called at each open-ended nudge with the current iteration; may return a note for the agent (e.g. a stagnation warning).
      */
     public function __construct(
         private LlmClient $llm,
@@ -67,6 +75,7 @@ class AgentRunner
         }
 
         $this->activePromptId = $prompt['id'];
+        $this->openEnded = $openEnded;
 
         $messages = [
             ['role' => 'system', 'content' => $prompt['body']],
@@ -91,10 +100,24 @@ class AgentRunner
 
             ($this->output)('iteration', "Iteration {$this->iteration} · prompt: {$this->activePromptId} · provider: {$this->llm->activeProvider()} · tools created: {$this->toolsCreated}");
 
-            $assistant = $this->llm->chat(
-                $messages,
-                $this->registry->allDefinitions($this->modeConfig['allow_make_tool'], $this->subagentsEnabled())
-            );
+            $tools = $this->registry->allDefinitions($this->modeConfig['allow_make_tool'], $this->subagentsEnabled());
+
+            try {
+                $assistant = $this->llm->chat($messages, $tools);
+            } catch (ContextOverflowException) {
+                // The configured window estimate was too optimistic: the
+                // provider rejected the conversation outright, so a normal
+                // summarization round-trip would be rejected too. Drop old
+                // history hard, remember the size that failed, and retry once.
+                $failedSize = strlen(json_encode($messages, JSON_UNESCAPED_SLASHES) ?: '');
+                $this->learnedCompressChars = max(50_000, intdiv($failedSize, 2));
+
+                ($this->output)('system', "Provider reported a context overflow at ~{$failedSize} chars; emergency-truncating history and compressing earlier from now on.");
+
+                $this->emergencyTruncate($messages, $task);
+
+                $assistant = $this->llm->chat($messages, $tools);
+            }
 
             $messages[] = $assistant;
 
@@ -116,16 +139,31 @@ class AgentRunner
                 // A journal answer with no tool call is a natural resting point:
                 // tools from prior iterations are on disk and the roadmap is
                 // current. Snapshot here before nudging the agent onward.
+                $checkpointNote = null;
+
                 if ($this->checkpoint !== null) {
-                    ($this->checkpoint)($this->iteration);
+                    $checkpointNote = ($this->checkpoint)($this->iteration);
                 }
+
+                // Each checkpoint starts a fresh session segment: the safety
+                // fuses bound how much can happen per segment, not per run.
+                // Without this, a --forever run permanently loses make_tool
+                // after max_tools_created_per_run and degenerates into
+                // journal-editing loops (as observed in the wild).
+                $this->refreshSegmentBudgets();
 
                 ($this->output)('system', 'Open-ended mode: nudging the agent to pick its next move.');
 
+                $continueMessage = $this->limits['autonomous_continue_message']
+                    ?? 'Continue the open-ended experiment. Decide your next useful or surprising step, then either call a tool, create a tool, inspect your resources, or report what you discovered.';
+
+                if ($checkpointNote !== null && $checkpointNote !== '') {
+                    $continueMessage .= "\n\n[Host] {$checkpointNote}";
+                }
+
                 $messages[] = [
                     'role' => 'user',
-                    'content' => $this->limits['autonomous_continue_message']
-                        ?? 'Continue the open-ended experiment. Decide your next useful or surprising step, then either call a tool, create a tool, inspect your resources, or report what you discovered.',
+                    'content' => $continueMessage,
                 ];
 
                 continue;
@@ -163,6 +201,93 @@ class AgentRunner
     }
 
     /**
+     * Reset the per-segment safety fuses at an open-ended resting point. The
+     * limits still bound how much damage one segment can do between human-
+     * reviewable checkpoints, but a long run no longer starves permanently.
+     */
+    private function refreshSegmentBudgets(): void
+    {
+        $exhausted = [];
+
+        if ($this->toolsCreated >= ($this->limits['max_tools_created_per_run'] ?? PHP_INT_MAX)) {
+            $exhausted[] = 'tool creation';
+        }
+
+        if ($this->subagentsSpawned >= ($this->limits['max_subagents_per_run'] ?? PHP_INT_MAX)) {
+            $exhausted[] = 'subagents';
+        }
+
+        if ($this->promptSwitches >= ($this->limits['max_prompt_switches_per_run'] ?? PHP_INT_MAX)) {
+            $exhausted[] = 'prompt switches';
+        }
+
+        $this->toolsCreated = 0;
+        $this->subagentsSpawned = 0;
+        $this->promptSwitches = 0;
+
+        if ($exhausted !== []) {
+            ($this->output)('system', 'Checkpoint refreshed exhausted budgets: '.implode(', ', $exhausted).'.');
+        }
+    }
+
+    /**
+     * Tell the model how a limit behaves: in an open-ended run the fuse
+     * refreshes at the next checkpoint, so the agent should rest (answer
+     * without tool calls) instead of abandoning the capability forever.
+     */
+    private function limitReachedMessage(string $subject): string
+    {
+        return $this->openEnded
+            ? "The {$subject} limit for this segment has been reached. It refreshes at the next checkpoint: finish this segment with a journal answer (no tool calls), then continue."
+            : "The {$subject} limit for this run has been reached.";
+    }
+
+    /**
+     * Last-resort history shrink after a provider context overflow. Unlike
+     * normal compression there is no LLM round-trip (the history is already
+     * unsendable), so old messages are dropped, not summarized: keep the
+     * system prompt, a bridge message pointing at the persistent workspace,
+     * and a recent tail small enough to fit any plausible real window.
+     *
+     * @param array<int, array<string, mixed>> $messages
+     */
+    private function emergencyTruncate(array &$messages, string $task): void
+    {
+        $system = $messages[0];
+        $budget = 200_000; // chars, ~50K tokens: fits every model in use here.
+
+        $tail = [];
+        $size = 0;
+
+        for ($i = count($messages) - 1; $i >= 1; $i--) {
+            $size += strlen(json_encode($messages[$i], JSON_UNESCAPED_SLASHES) ?: '');
+
+            if ($size > $budget && $tail !== []) {
+                break;
+            }
+
+            array_unshift($tail, $messages[$i]);
+        }
+
+        // A tool result whose assistant tool_call partner was dropped would be
+        // rejected by the API; trim orphaned tool messages off the front.
+        while ($tail !== [] && ($tail[0]['role'] ?? '') === 'tool') {
+            array_shift($tail);
+        }
+
+        $messages = array_merge([
+            $system,
+            [
+                'role' => 'user',
+                'content' => "Original task: {$task}\n\n"
+                    .'[Host] Emergency context truncation: the provider rejected the conversation as too large, '
+                    .'so your older history was dropped without a summary. Rebuild your bearings from ROADMAP.md '
+                    .'and your workspace files, then continue the mission.',
+            ],
+        ], $tail);
+    }
+
+    /**
      * When the conversation history nears the model's context limit, ask the
      * model to write a memory summary of the session, then replace the old
      * messages with it. The agent experiences this as consolidated memory;
@@ -173,6 +298,10 @@ class AgentRunner
     private function compressHistoryIfNeeded(array &$messages, string $task): void
     {
         $threshold = $this->limits['history_compress_chars'] ?? $this->llm->contextCharBudget() ?? 150_000;
+
+        if ($this->learnedCompressChars !== null) {
+            $threshold = $threshold > 0 ? min($threshold, $this->learnedCompressChars) : $this->learnedCompressChars;
+        }
 
         if ($threshold <= 0) {
             return;
@@ -258,7 +387,7 @@ class AgentRunner
         $max = $this->limits['max_subagents_per_run'] ?? 0;
 
         if ($this->subagentsSpawned >= $max) {
-            return ['error' => 'The subagent limit for this run has been reached.'];
+            return ['error' => $this->limitReachedMessage('subagent')];
         }
 
         $this->subagentsSpawned++;
@@ -309,7 +438,7 @@ class AgentRunner
         if ($this->promptSwitches >= $this->limits['max_prompt_switches_per_run']) {
             $this->logger->promptSwitch($logEntry);
 
-            return ['switched' => false, 'reason' => 'The prompt switch limit for this run has been reached.'];
+            return ['switched' => false, 'reason' => $this->limitReachedMessage('prompt switch')];
         }
 
         if ($this->modeConfig['require_human_approval_for_prompt_switch']) {
@@ -358,9 +487,9 @@ class AgentRunner
         }
 
         if ($this->toolsCreated >= $this->limits['max_tools_created_per_run']) {
-            $this->logger->toolChange($logEntry);
+            $this->logger->toolChange($logEntry + ['limit' => true]);
 
-            return ['created' => false, 'errors' => ['The tool creation limit for this run has been reached.']];
+            return ['created' => false, 'errors' => [$this->limitReachedMessage('tool creation')]];
         }
 
         $errors = $this->toolMaker->validate($name, $schema, $code, $overwrite);

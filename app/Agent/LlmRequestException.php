@@ -11,6 +11,7 @@ class LlmRequestException extends RuntimeException
         string $message,
         public readonly bool $retryable,
         ?Throwable $previous = null,
+        public readonly bool $contextOverflow = false,
     ) {
         parent::__construct($message, 0, $previous);
     }

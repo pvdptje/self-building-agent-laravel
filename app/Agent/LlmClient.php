@@ -80,6 +80,14 @@ class LlmClient
                     } catch (LlmRequestException $e) {
                         $lastError = $e;
 
+                        // The conversation is too big for the provider's real
+                        // window. Retrying or failing over cannot fix that (the
+                        // fallback provider's window is no bigger) — the caller
+                        // must shrink the history and try again.
+                        if ($e->contextOverflow) {
+                            throw new ContextOverflowException($e->getMessage(), $e);
+                        }
+
                         if (! $e->retryable) {
                             ($this->onFailover)("Provider [{$name}] rejected the request ({$e->getMessage()}); moving to the next provider.");
 
@@ -102,6 +110,33 @@ class LlmClient
         }
 
         throw new RuntimeException('All LLM providers failed after retries.', previous: $lastError);
+    }
+
+    /**
+     * Providers phrase context-window rejections differently; match the common
+     * wordings (OpenAI-compatible APIs, which both configured providers speak).
+     */
+    private function looksLikeContextOverflow(string $body): bool
+    {
+        $needles = [
+            'context length',
+            'context_length',
+            'maximum context',
+            'context window',
+            'too many tokens',
+            'tokens. however',
+            'reduce the length',
+        ];
+
+        $haystack = mb_strtolower($body);
+
+        foreach ($needles as $needle) {
+            if (str_contains($haystack, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -146,6 +181,7 @@ class LlmClient
             throw new LlmRequestException(
                 "HTTP {$status}: ".mb_substr($response->body(), 0, 500),
                 retryable: $status >= 500 || $status === 429 || $status === 408,
+                contextOverflow: $status === 400 && $this->looksLikeContextOverflow($response->body()),
             );
         }
 

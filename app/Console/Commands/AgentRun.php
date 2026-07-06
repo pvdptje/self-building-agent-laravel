@@ -23,6 +23,12 @@ class AgentRun extends Command
 
     protected $description = 'Run the experimental self-improving agent loop';
 
+    /** How many consecutive checkpoints changed nothing but workspace notes. */
+    private int $notesOnlyCheckpoints = 0;
+
+    /** Consecutive notes-only checkpoints tolerated before the host pushes back. */
+    private const STAGNATION_THRESHOLD = 3;
+
     public function handle(): int
     {
         $config = config('agent');
@@ -51,7 +57,11 @@ class AgentRun extends Command
             ),
             prompts: new PromptRepository($config['prompts_path']),
             registry: $registry,
-            toolMaker: new ToolMaker($config['generated_tools_path'], $registry->builtInNames()),
+            toolMaker: new ToolMaker(
+                $config['generated_tools_path'],
+                $registry->builtInNames(),
+                (bool) ($config['modes'][$mode]['allow_shell_in_tools'] ?? false),
+            ),
             logger: new AgentLogger($config['log_path']),
             mode: $mode,
             modeConfig: $config['modes'][$mode],
@@ -78,7 +88,7 @@ class AgentRun extends Command
             },
             spawnSubagent: fn (string $task) => $this->runSubagent($config, $task),
             checkpoint: $this->option('forever')
-                ? fn (int $iteration) => $this->gitCheckpoint($config, $iteration)
+                ? fn (int $iteration): ?string => $this->gitCheckpoint($config, $iteration)
                 : null,
         );
 
@@ -122,9 +132,13 @@ class AgentRun extends Command
      * Every git failure is swallowed and reported as a warning: a checkpoint
      * that cannot commit or push must never interrupt the run.
      *
+     * Returns a note for the agent when the run looks stagnant: several
+     * consecutive checkpoints whose only changes are workspace notes mean the
+     * agent is polishing its journal instead of building.
+     *
      * @param array<string, mixed> $config
      */
-    private function gitCheckpoint(array $config, int $iteration): void
+    private function gitCheckpoint(array $config, int $iteration): ?string
     {
         $root = base_path();
 
@@ -141,12 +155,19 @@ class AgentRun extends Command
 
             // Nothing staged? Skip the commit so a no-op checkpoint is silent
             // instead of erroring with "nothing to commit".
-            $staged = new Process(['git', 'diff', '--cached', '--quiet'], $root);
-            $staged->run();
+            $stagedFiles = array_values(array_filter(explode(
+                "\n",
+                trim($this->runGit(['diff', '--cached', '--name-only'], $root)->getOutput())
+            )));
 
-            if ($staged->getExitCode() === 0) {
-                return;
+            if ($stagedFiles === []) {
+                return $this->trackStagnation(notesOnly: true);
             }
+
+            $notesOnly = array_filter(
+                $stagedFiles,
+                fn (string $file) => ! (str_ends_with($file, '.md') && str_contains($file, 'agent/workspace'))
+            ) === [];
 
             $commit = $this->runGit(
                 ['commit', '--no-verify', '-m', "agent checkpoint: iteration {$iteration}"],
@@ -156,7 +177,7 @@ class AgentRun extends Command
             if (! $commit->isSuccessful()) {
                 $this->warn('Checkpoint commit failed: '.trim($commit->getErrorOutput() ?: $commit->getOutput()));
 
-                return;
+                return null;
             }
 
             $this->line("<fg=blue>⏵ Checkpoint committed at iteration {$iteration}.</>");
@@ -171,9 +192,39 @@ class AgentRun extends Command
             } else {
                 $this->warn('Checkpoint push failed (commit is saved locally): '.trim($push->getErrorOutput() ?: $push->getOutput()));
             }
+
+            return $this->trackStagnation($notesOnly);
         } catch (\Throwable $e) {
             $this->warn('Checkpoint skipped (git error): '.$e->getMessage());
+
+            return null;
         }
+    }
+
+    /**
+     * Count consecutive checkpoints that changed nothing but workspace notes
+     * and, past the threshold, hand the agent an escalating course correction.
+     */
+    private function trackStagnation(bool $notesOnly): ?string
+    {
+        if (! $notesOnly) {
+            $this->notesOnlyCheckpoints = 0;
+
+            return null;
+        }
+
+        $this->notesOnlyCheckpoints++;
+
+        if ($this->notesOnlyCheckpoints < self::STAGNATION_THRESHOLD) {
+            return null;
+        }
+
+        $this->warn("Stagnation: {$this->notesOnlyCheckpoints} consecutive checkpoints changed only workspace notes.");
+
+        return "Stagnation warning: your last {$this->notesOnlyCheckpoints} checkpoints changed nothing except workspace notes "
+            .'(ROADMAP.md and similar). Editing notes is not progress. Your next segment must produce a verifiable capability '
+            .'change: create a tool, fix or improve an existing tool file, or fetch and process something new from outside. '
+            .'Do not touch ROADMAP.md again until you have done one of those.';
     }
 
     /**
