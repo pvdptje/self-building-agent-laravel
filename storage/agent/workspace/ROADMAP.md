@@ -81,3 +81,4 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 31. batch_image_process — 7 GD transform ops: resize, JPEG->WebP (43.6% savings), thumbnail 64x64, grayscale, sepia, negative, blur. Batch dir processing.
 32. file_archive — bz2 compress/decompress added. 14.8KB->3.5KB (76.5% savings), exact match round-trip. ZipArchive + bz2 extension.
 33. find_duplicates — Content-based duplicate detection (MD5). 425 files, 5 duplicate groups, 32.5KB wasted. Found ZIP-extract copies and identical PNGs. First content hash dedup tool.
+34. find_duplicates — MD5 content hash dedup: 425 files, 5 dup groups, 32.5KB wasted. Found ZIP-extract copies + identical PNGs.
