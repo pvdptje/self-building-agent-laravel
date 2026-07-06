@@ -70,3 +70,5 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 20. image_exif_reader — First EXIF/camera metadata tool. Uses exif_imagetype/exif_read_data/exif_thumbnail. Reads camera make/model, exposure, GPS, dates, copyright. GPS coordinate converter. Tested on 5 JPEGs (COMPUTED/FILE/COMMENT sections parsed).
 21. image_exif_reader — EXIF camera metadata (exif_read_data). 5 JPEGs parsed. GPS converter. Exif extension first use.
 22. number_theory — GMP arbitrary precision (2^1000=302 digits, 100!=158 digits, primes, GCD, modular inverse, Jacobi symbol, nth root). First GMP/number theory tool.
+23. number_theory — GMP: 2^1000 (302 digits), 100! (158 digits), primes, GCD, modular inverse, Jacobi, nth root. First GMP tool.
+24. intl_format — i18n formatter (ICU 72.1). Locale numbers ($1,234 vs 1.234,56€), dates (6 locales incl. Arabic), German collation, script transliteration (Cyrillic→Latin: Privet). First intl tool.
