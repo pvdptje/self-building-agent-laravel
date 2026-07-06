@@ -76,186 +76,95 @@ $toolDefinition_image_text_overlay = array (
 if (! function_exists('image_text_overlay')) {
     function image_text_overlay($image_path, $text, $position = null, $x = null, $y = null, $font_size = null, $color = null, $opacity = null, $text_shadow = null, $filename = null)
     {
-        $image_path = $image_path ?? '';
-        $text = $text ?? '';
-        $x = (int)($x ?? 10);
-        $y = (int)($y ?? 10);
-        $font_size = (int)($font_size ?? 5);
-        $color_hex = $color ?? '#FFFFFF';
-        $position = $position ?? 'top-left';
-        $opacity = (int)($opacity ?? 100);
-        $filename = $filename ?? ('overlay_' . date('Ymd_His'));
-        $text_shadow = $text_shadow ?? false;
+        // Image text overlay - add captions/watermarks using GD
+        $img_path=isset($image_path)?(string)$image_path:'';
+        $text=isset($text)?(string)$text:'';
+        $pos=isset($position)?(string)$position:'top-left';
+        $offset_x=isset($x)?(int)$x:10;
+        $offset_y=isset($y)?(int)$y:10;
+        $font_size=isset($font_size)?min(max((int)$font_size,1),5):5;
+        $color_hex=isset($color)?(string)$color:'#FFFFFF';
+        $opacity=isset($opacity)?min(max((int)$opacity,10),100):100;
+        $shadow=isset($text_shadow)?(bool)$text_shadow:false;
+        $fn=isset($filename)?(string)$filename:'overlay_'.date('Ymd_His').'.png';
 
-        if ($font_size < 1) $font_size = 1;
-        if ($font_size > 5) $font_size = 5;
-        if ($opacity < 10) $opacity = 10;
-        if ($opacity > 100) $opacity = 100;
+        if($img_path===''||$text==='')return['error'=>'image_path and text required'];
+        if(!extension_loaded('gd'))return['error'=>'GD not loaded'];
 
-        if (empty($image_path)) {
-            return ['success' => false, 'error' => 'Image path is required.'];
-        }
-        if (empty($text)) {
-            return ['success' => false, 'error' => 'Text is required.'];
-        }
-
-        // Resolve path relative to project root
-        $project_root = realpath(__DIR__ . '/../../..');
-        $full_path = realpath($project_root . '/' . $image_path);
-
-        if ($full_path === false || !file_exists($full_path)) {
-            // Try workspace
-            $full_path = realpath(__DIR__ . '/../workspace/' . $image_path);
-            if ($full_path === false || !file_exists($full_path)) {
-                return ['success' => false, 'error' => 'Image file not found: ' . $image_path];
+        // Find image
+        $full_path=realpath($img_path);
+        if($full_path===false||!file_exists($full_path)){
+            $ws=realpath(__DIR__.'/../../workspace');
+            $full_path=realpath($ws.'/'.$img_path);
+            if($full_path===false){
+                $pr=realpath(__DIR__.'/../../..');
+                $full_path=realpath($pr.'/'.$img_path);
             }
         }
+        if($full_path===false||!file_exists($full_path))return['error'=>"Image not found: {$img_path}"];
 
-        // Load the image
-        $info = @getimagesize($full_path);
-        if ($info === false) {
-            return ['success' => false, 'error' => 'Cannot read image or unsupported format.'];
+        $ii=@getimagesize($full_path);
+        if($ii===false)return['error'=>'Invalid image'];
+        list($w,$h,$type)=$ii;
+
+        $img=null;
+        switch($type){
+            case IMAGETYPE_JPEG:$img=@imagecreatefromjpeg($full_path);break;
+            case IMAGETYPE_PNG:$img=@imagecreatefrompng($full_path);break;
+            case IMAGETYPE_WEBP:$img=@imagecreatefromwebp($full_path);break;
+            case IMAGETYPE_GIF:$img=@imagecreatefromgif($full_path);break;
+            case IMAGETYPE_BMP:$img=@imagecreatefrombmp($full_path);break;
+            default:return['error'=>'Unsupported format'];
         }
-
-        $mime = $info['mime'];
-        switch ($mime) {
-            case 'image/jpeg':
-                $img = @imagecreatefromjpeg($full_path);
-                break;
-            case 'image/png':
-                $img = @imagecreatefrompng($full_path);
-                imagealphablending($img, true);
-                imagesavealpha($img, true);
-                break;
-            case 'image/gif':
-                $img = @imagecreatefromgif($full_path);
-                break;
-            case 'image/webp':
-                $img = @imagecreatefromwebp($full_path);
-                break;
-            case 'image/bmp':
-                if (function_exists('imagecreatefrombmp')) {
-                    $img = @imagecreatefrombmp($full_path);
-                } else {
-                    return ['success' => false, 'error' => 'BMP format not supported on this PHP installation.'];
-                }
-                break;
-            default:
-                return ['success' => false, 'error' => 'Unsupported image format: ' . $mime];
-        }
-
-        if ($img === false) {
-            return ['success' => false, 'error' => 'Failed to load image.'];
-        }
-
-        $img_w = imagesx($img);
-        $img_h = imagesy($img);
+        if(!$img)return['error'=>'Failed to load image'];
 
         // Parse color
-        $hex = ltrim($color_hex, '#');
-        if (strlen($hex) === 3) $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
-        $r = hexdec(substr($hex, 0, 2));
-        $g = hexdec(substr($hex, 2, 2));
-        $b = hexdec(substr($hex, 4, 2));
+        $hex=ltrim($color_hex,'#');
+        $cr=hexdec(substr($hex,0,2));$cg=hexdec(substr($hex,2,2));$cb=hexdec(substr($hex,4,2));
+        $alpha=round((100-$opacity)*1.27);
+        $text_color=imagecolorallocatealpha($img,$cr,$cg,$cb,min(127,max(0,$alpha)));
 
-        // Calculate text dimensions with built-in font
-        $text_width = strlen($text) * imagefontwidth($font_size);
-        $text_height = imagefontheight($font_size);
+        // Calc text size (built-in font)
+        $char_w=imagefontwidth($font_size);
+        $char_h=imagefontheight($font_size);
+        $text_w=strlen($text)*$char_w;
+        $text_h=$char_h;
 
-        // Resolve position to x,y coordinates
-        $padding = 10;
-        switch ($position) {
-            case 'top-left':
-                $tx = $padding + $x;
-                $ty = $padding + $y;
-                break;
-            case 'top-center':
-                $tx = (int)(($img_w - $text_width) / 2) + $x;
-                $ty = $padding + $y;
-                break;
-            case 'top-right':
-                $tx = $img_w - $text_width - $padding - $x;
-                $ty = $padding + $y;
-                break;
-            case 'center':
-                $tx = (int)(($img_w - $text_width) / 2) + $x;
-                $ty = (int)(($img_h - $text_height) / 2) + $y;
-                break;
-            case 'bottom-left':
-                $tx = $padding + $x;
-                $ty = $img_h - $text_height - $padding - $y;
-                break;
-            case 'bottom-center':
-                $tx = (int)(($img_w - $text_width) / 2) + $x;
-                $ty = $img_h - $text_height - $padding - $y;
-                break;
-            case 'bottom-right':
-                $tx = $img_w - $text_width - $padding - $x;
-                $ty = $img_h - $text_height - $padding - $y;
-                break;
-            default:
-                $tx = $x;
-                $ty = $y;
-                break;
-        }
-
-        // Clamp to image bounds
-        $tx = max(0, min($tx, $img_w - 1));
-        $ty = max(0, min($ty, $img_h - 1));
-
-        // Allocate color
-        $text_color = imagecolorallocatealpha($img, $r, $g, $b, (int)(127 * (1 - $opacity / 100)));
-        if ($text_color === false) {
-            $text_color = imagecolorallocate($img, $r, $g, $b);
+        // Position
+        $x=$offset_x;$y=$offset_y;
+        switch($pos){
+            case 'top-right':$x=$w-$text_w-$offset_x;$y=$offset_y;break;
+            case 'top-center':$x=(int)(($w-$text_w)/2);$y=$offset_y;break;
+            case 'center':$x=(int)(($w-$text_w)/2);$y=(int)(($h-$text_h)/2);break;
+            case 'bottom-left':$x=$offset_x;$y=$h-$text_h-$offset_y;break;
+            case 'bottom-center':$x=(int)(($w-$text_w)/2);$y=$h-$text_h-$offset_y;break;
+            case 'bottom-right':$x=$w-$text_w-$offset_x;$y=$h-$text_h-$offset_y;break;
         }
 
         // Shadow
-        if ($text_shadow) {
-            $shadow_color = imagecolorallocatealpha($img, 0, 0, 0, (int)(127 * (1 - $opacity / 100)));
-            if ($shadow_color === false) {
-                $shadow_color = imagecolorallocate($img, 0, 0, 0);
-            }
-            imagestring($img, $font_size, $tx + 1, $ty + 1, $text, $shadow_color);
+        if($shadow){
+            $shadow_color=imagecolorallocatealpha($img,0,0,0,min(127,max(0,$alpha+30)));
+            imagestring($img,$font_size,$x+1,$y+1,$text,$shadow_color);
+            imagestring($img,$font_size,$x+1,$y-1,$text,$shadow_color);
+            imagestring($img,$font_size,$x-1,$y+1,$text,$shadow_color);
+            imagestring($img,$font_size,$x-1,$y-1,$text,$shadow_color);
         }
 
-        // Draw text
-        imagestring($img, $font_size, $tx, $ty, $text, $text_color);
+        imagestring($img,$font_size,$x,$y,$text,$text_color);
 
         // Save
-        $workspace = __DIR__ . '/../workspace';
-        if (!is_dir($workspace)) {
-            mkdir($workspace, 0755, true);
-        }
-
-        if (!str_ends_with(strtolower($filename), '.png')) {
-            $filename .= '.png';
-        }
-        $filepath = $workspace . '/' . $filename;
-
-        // Always save as PNG to preserve alpha
-        $saved = imagepng($img, $filepath, 6);
+        $output='storage/agent/workspace/'.$fn;
+        $saved=imagepng($img,$output);
+        $os=$saved?filesize($output):0;
         imagedestroy($img);
 
-        if (!$saved) {
-            return ['success' => false, 'error' => 'Failed to save output image.'];
-        }
-
-        return [
-            'success' => true,
-            'filepath' => $filepath,
-            'filename' => basename($filepath),
-            'source_image' => $image_path,
-            'source_dimensions' => ['width' => $img_w, 'height' => $img_h],
-            'text' => [
-                'content' => $text,
-                'position' => $position,
-                'x' => $tx,
-                'y' => $ty,
-                'color' => $color_hex,
-                'opacity' => $opacity . '%',
-                'font_size' => $font_size,
-                'shadow' => $text_shadow,
-            ],
+        return[
+            'success'=>$saved,
+            'filepath'=>realpath($output)?:$output,
+            'filename'=>$fn,
+            'source_image'=>$img_path,
+            'source_dimensions'=>['width'=>$w,'height'=>$h],
+            'text'=>['content'=>$text,'position'=>$pos,'x'=>$x,'y'=>$y,'color'=>$color_hex,'opacity'=>$opacity.'%','font_size'=>$font_size,'shadow'=>$shadow],
         ];
     }
 }

@@ -40,151 +40,95 @@ $toolDefinition_image_analysis = array (
 if (! function_exists('image_analysis')) {
     function image_analysis($path, $max_colors = null, $histogram_buckets = null)
     {
-        // Image Analysis v3 — fixed project root path resolution
-        $path = $path ?? '';
-        $max_colors = $max_colors ?? 8;
-        $histogram_buckets = $histogram_buckets ?? 10;
+        // Image analysis - dominant colors, histogram, brightness
+        $path=isset($path)?(string)$path:'';
+        $max_colors=isset($max_colors)?min(max((int)$max_colors,1),20):8;
+        $hist_buckets=isset($histogram_buckets)?min(max((int)$histogram_buckets,2),32):10;
+        if($path==='')return['error'=>'Path required'];
+        if(!extension_loaded('gd'))return['error'=>'GD not loaded'];
 
-        if (empty($path)) return ['error' => 'path is required', 'success' => false];
-        $max_colors = max(1, min(20, (int)$max_colors));
-        $histogram_buckets = max(2, min(32, (int)$histogram_buckets));
-
-        // Tools dir: /project/storage/agent/tools/
-        // Project root: /project/
-        $project_root = realpath(__DIR__ . '/../../../');
-        $full_path = $project_root . '/' . ltrim($path, '/');
-
-        if (!file_exists($full_path)) {
-            return ['error' => "File not found: $path", 'success' => false];
+        $full=realpath($path);
+        if($full===false||!file_exists($full)){
+            $pr=realpath(__DIR__.'/../../..');
+            $full=realpath($pr.'/'.$path);
         }
+        if($full===false||!file_exists($full))return['error'=>"File not found: {$path}"];
 
-        $info = @getimagesize($full_path);
-        if ($info === false) return ['error' => 'Not a valid image or format not supported', 'success' => false];
+        $ii=@getimagesize($full);
+        if($ii===false)return['error'=>'Not a valid image'];
 
-        $width = $info[0];
-        $height = $info[1];
-        $mime = $info['mime'];
-        $file_size = filesize($full_path);
-
-        $img = null;
-        switch ($mime) {
-            case 'image/jpeg': case 'image/jpg': $img = @imagecreatefromjpeg($full_path); break;
-            case 'image/png':  $img = @imagecreatefrompng($full_path); break;
-            case 'image/gif':  $img = @imagecreatefromgif($full_path); break;
-            case 'image/webp': $img = @imagecreatefromwebp($full_path); break;
-            case 'image/bmp':  $img = @imagecreatefrombmp($full_path); break;
-            default: return ['error' => "Unsupported format: $mime", 'success' => false];
+        list($w,$h,$type)=$ii;
+        $img=null;
+        switch($type){
+            case IMAGETYPE_JPEG:$img=@imagecreatefromjpeg($full);break;
+            case IMAGETYPE_PNG:$img=@imagecreatefrompng($full);break;
+            case IMAGETYPE_WEBP:$img=@imagecreatefromwebp($full);break;
+            case IMAGETYPE_GIF:$img=@imagecreatefromgif($full);break;
+            case IMAGETYPE_BMP:$img=@imagecreatefrombmp($full);break;
         }
-        if ($img === false) return ['error' => 'GD failed to load image', 'success' => false];
+        if(!$img)return['error'=>'Failed to load image'];
 
-        $sw = imagesx($img);
-        $sh = imagesy($img);
-        $total_pixels = $sw * $sh;
+        $pixels=$w*$h;
+        $total_brightness=0;
+        $histogram=array_fill(0,$hist_buckets,0);
+        $color_counts=[];
 
-        // Adaptive sampling for performance
-        $sample = 1;
-        if ($total_pixels > 500000) $sample = max(2, (int)ceil(sqrt($total_pixels / 500000)));
-
-        $pixel_count = 0;
-        $color_counts = [];
-        $sum_r = 0; $sum_g = 0; $sum_b = 0;
-        $hist_buckets = array_fill(0, $histogram_buckets, 0);
-
-        for ($y = 0; $y < $sh; $y += $sample) {
-            for ($x = 0; $x < $sw; $x += $sample) {
-                $rgb = imagecolorat($img, $x, $y);
-                $r = ($rgb >> 16) & 0xFF;
-                $g = ($rgb >> 8) & 0xFF;
-                $b = $rgb & 0xFF;
+        $sample_rate=max(1,(int)($pixels/50000));
+        $sampled=0;
+        for($y=0;$y<$h;$y+=$sample_rate){
+            for($x=0;$x<$w;$x+=$sample_rate){
+                $rgb=imagecolorat($img,$x,$y);
+                $r=($rgb>>16)&0xFF;$g=($rgb>>8)&0xFF;$b=$rgb&0xFF;
+                $brightness=(int)(($r+$g+$b)/3);
+                $total_brightness+=$brightness;
                 
-                $sum_r += $r; $sum_g += $g; $sum_b += $b;
+                $bucket=(int)($brightness*$hist_buckets/256);
+                if($bucket>=$hist_buckets)$bucket=$hist_buckets-1;
+                $histogram[$bucket]++;
                 
-                // Quantize to 32-step for dominant color detection
-                $key = sprintf('%02x%02x%02x',
-                    (int)(min(255, round($r / 32) * 32)),
-                    (int)(min(255, round($g / 32) * 32)),
-                    (int)(min(255, round($b / 32) * 32))
-                );
-                if (!isset($color_counts[$key])) $color_counts[$key] = 0;
-                $color_counts[$key]++;
-                
-                $lum = 0.2126 * $r + 0.7152 * $g + 0.0722 * $b;
-                $bi = (int)min($histogram_buckets - 1, max(0, floor($lum / 256 * $histogram_buckets)));
-                $hist_buckets[$bi]++;
-                
-                $pixel_count++;
+                // Quantize color for counting
+                $qr=(int)($r/32);$qg=(int)($g/32);$qb=(int)($b/32);
+                $qk=($qr<<16)|($qg<<8)|$qb;
+                if(!isset($color_counts[$qk]))$color_counts[$qk]=0;
+                $color_counts[$qk]++;
+                $sampled++;
             }
         }
         imagedestroy($img);
 
-        if ($pixel_count === 0) return ['error' => 'No pixels sampled', 'success' => false];
+        $avg_brightness=$sampled>0?$total_brightness/$sampled:0;
 
-        $avg_r = (int)round($sum_r / $pixel_count);
-        $avg_g = (int)round($sum_g / $pixel_count);
-        $avg_b = (int)round($sum_b / $pixel_count);
-        $avg_hex = sprintf('%02x%02x%02x', $avg_r, $avg_g, $avg_b);
-        $avg_lum = round(($sum_r * 0.2126 + $sum_g * 0.7152 + $sum_b * 0.0722) / $pixel_count, 1);
-
-        // Dominant colors
+        // Sort colors by frequency
         arsort($color_counts);
-        $dominant = [];
-        $i = 0;
-        foreach ($color_counts as $hex => $cnt) {
+        $dominant=[];
+        $i=0;
+        foreach($color_counts as$qk=>$count){
+            if($i>=$max_colors)break;
+            $r=(($qk>>16)&0x1F)*8;$g=(($qk>>8)&0x1F)*8;$b=($qk&0x1F)*8;
+            $hex=sprintf('#%02x%02x%02x',$r,$g,$b);
+            $pct=round($count/$sampled*100,1);
+            $dominant[]=['color'=>$hex,'rgb'=>[$r,$g,$b],'percent'=>$pct];
             $i++;
-            $pct = round($cnt / $pixel_count * 100, 2);
-            $cr = hexdec(substr($hex, 0, 2));
-            $cg = hexdec(substr($hex, 2, 2));
-            $cb = hexdec(substr($hex, 4, 2));
-            $dominant[] = [
-                'rank' => $i, 'hex' => '#' . $hex,
-                'rgb' => ['r' => $cr, 'g' => $cg, 'b' => $cb],
-                'percentage' => $pct,
-            ];
-            if ($i >= $max_colors) break;
         }
 
-        // Brightness histogram
-        $histogram = [];
-        $bsize = 256 / $histogram_buckets;
-        foreach ($hist_buckets as $bi => $cnt) {
-            $lo = (int)($bi * $bsize);
-            $hi = (int)(($bi + 1) * $bsize - 1);
-            $histogram[] = [
-                'bucket' => $bi + 1, 'range' => "$lo-$hi",
-                'label' => $lo < 85 ? 'Dark' : ($lo < 171 ? 'Mid' : 'Light'),
-                'percentage' => round($cnt / $pixel_count * 100, 2),
-            ];
-        }
+        // Normalize histogram to percentages
+        $hist_pct=array_map(function($c)use($sampled){return$sampled>0?round($c/$sampled*100,1):0;},$histogram);
 
-        // Overall tone
-        $dark = array_sum(array_column(array_filter($histogram, fn($b) => $b['label'] === 'Dark'), 'percentage'));
-        $light = array_sum(array_column(array_filter($histogram, fn($b) => $b['label'] === 'Light'), 'percentage'));
-        $tone = $dark > 60 ? 'Mostly Dark' : ($light > 60 ? 'Mostly Light' : 'Balanced');
-
-        // Colorfulness
-        $colorfulness = round(sqrt(($avg_r - $avg_g)**2 + ($avg_r - $avg_b)**2 + ($avg_g - $avg_b)**2), 1);
-
-        return [
-            'success' => true,
-            'image' => [
-                'path' => $path, 'file_size' => $file_size,
-                'width' => $width, 'height' => $height,
-                'mime_type' => $mime,
-                'orientation' => $width > $height ? 'landscape' : ($width < $height ? 'portrait' : 'square'),
-            ],
-            'analysis' => [
-                'pixels_sampled' => $pixel_count,
-                'sample_rate' => $sample,
-                'average_color' => '#' . $avg_hex,
-                'average_rgb' => ['r' => $avg_r, 'g' => $avg_g, 'b' => $avg_b],
-                'average_brightness' => $avg_lum,
-                'average_brightness_pct' => round($avg_lum / 255 * 100, 1),
-                'overall_tone' => $tone,
-                'colorfulness' => $colorfulness,
-                'colorfulness_label' => $colorfulness < 20 ? 'Grayscale' : ($colorfulness < 60 ? 'Desaturated' : ($colorfulness < 120 ? 'Moderate' : 'Vibrant')),
-            ],
-            'dominant_colors' => $dominant,
-            'brightness_histogram' => $histogram,
+        return[
+            'success'=>true,
+            'path'=>$path,
+            'dimensions'=>"{$w}x{$h}",
+            'width'=>$w,'height'=>$h,
+            'megapixels'=>round($pixels/1000000,2),
+            'avg_brightness'=>round($avg_brightness,1),
+            'classification'=>$avg_brightness<85?'dark':($avg_brightness<170?'medium':'light'),
+            'dominant_colors'=>$dominant,
+            'histogram'=>array_map(function($c,$i)use($hist_buckets){
+                $low=(int)($i*256/$hist_buckets);
+                $high=(int)(($i+1)*256/$hist_buckets)-1;
+                return['range'=>"{$low}-{$high}",'percent'=>$c];
+            },$hist_pct,array_keys($hist_pct)),
+            'sampled_pixels'=>$sampled,
         ];
     }
 }
