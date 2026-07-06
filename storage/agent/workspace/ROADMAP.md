@@ -77,8 +77,8 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 56. Synthetic data ETL — peak/trough classification
 57. Code quality audit — static analysis
 58. **Data histogram** — bimodal sine wave: 4 peaks/troughs each at extremes.
-    First statistical visualization pipeline.
-59. **Depth normalization** — data_normalizer: Fiji 686km→1.0, shallows→0.0.
-    First feature-scaling geophysics pipeline.
+59. Depth normalization — feature scaling
+60. **Code reflection** — php_reflector on http_fetch: 5 params, all nullable,
+    no type hints, no docblock, 9 lines. First reflection-based code insight.
 
-## Final — 59 frontiers. 37 reports. 51 tools. 28 domains. 0 new tools.
+## Final — 60 frontiers. 37 reports. 52 tools. 29 domains. 0 new tools.
