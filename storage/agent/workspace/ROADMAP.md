@@ -33,11 +33,18 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 22. Annual solar cycle (London) — equinox/solstice photoperiod curve
 23. Database inventory — cross-DB introspection
 24. Ecosystem capstone — summary of all pipelines
-25. Brewery discovery (Portland) — Open Brewery DB
-26. Supply chain trace (Coca-Cola) — 26-country distribution
-27. Image format conversion — GD feasibility proven
-28. Holiday density global — 4-country comparison
-29. Ocean temperature gradient — latitudinal analysis, currents vs solar
+29. Ocean temperature gradient — latitudinal analysis
+30. **Nutritional economics** — food + country + forex → purchasing power.
+    Same Nutella jar = 2.4% of US daily income vs 68% of India's.
+    28× disparity. Caloric density, GDP, and forex intersect.
+    First nutritional-development economics synthesis.
+
+---
+
+## Final — 30 Frontiers Complete
+
+26 reports. 26 tools. 14 domains. 0 new tools.
+Roadmap: 40 lines. Core discovery: Composition IS capability.
 
 ## Key Metrics
 - 29 frontiers completed
