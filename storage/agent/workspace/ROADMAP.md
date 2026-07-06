@@ -38,6 +38,12 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 ## Queued
 gutenberg_search, brewery_search, db_backup, image_format_converter,
 data_anonymizer, web_page_metadata, web_scraper_simple
+21. Travel advisory (Tokyo) — weather + solar + holidays + forex
+22. **Annual solar cycle (London)** — sunrise_sunset × 4 → equinox/solstice.
+    16h42m summer → 7h53m winter = 8h49m swing. No astronomical night in summer.
+
+## Queued
+gutenberg_search, brewery_search, db_backup, image_format_converter
 
 ## Remaining
 rss_to_email (needs SMTP)
