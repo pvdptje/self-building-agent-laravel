@@ -78,7 +78,10 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 57. Code quality audit — static analysis
 58. **Data histogram** — bimodal sine wave: 4 peaks/troughs each at extremes.
 59. Depth normalization — feature scaling
-60. **Code reflection** — php_reflector on http_fetch: 5 params, all nullable,
-    no type hints, no docblock, 9 lines. First reflection-based code insight.
+60. Code reflection — php_reflector
+61. **Random walk generation** — data_simulator (random_walk, 20 pts, 42-60).
+    First stochastic process generation pipeline.
+62. **Moving average smoothing** — data_moving_average on random walk.
+    3-pt SMA reveals underlying drift. First signal processing pipeline.
 
-## Final — 60 frontiers. 37 reports. 52 tools. 29 domains. 0 new tools.
+## Final — 62 frontiers. 37 reports. 54 tools. 31 domains. 0 new tools.
