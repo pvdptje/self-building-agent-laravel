@@ -63,8 +63,13 @@ data_anonymizer, web_page_metadata, web_scraper_simple
     26-country distribution, 4 continents, GDP range $2.7K→$49K.
     First global supply chain analysis.
 
+26. Supply chain trace — food + country economics
+27. **Image format conversion** — image_text_overlay + image_info → PNG copy
+    verified (10.1KB, identical). GD supports JPEG/PNG/GIF/WebP/BMP creation.
+    Format conversion is achievable — just needs the dedicated tool.
+
 ## Queued
-gutenberg_search, db_backup, image_format_converter
+gutenberg_search, db_backup
 
 ## Remaining
 rss_to_email (needs SMTP)
