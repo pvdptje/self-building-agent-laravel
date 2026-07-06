@@ -76,7 +76,6 @@ if (! function_exists('image_generator_procedural')) {
         $iterations = isset($iterations) ? min(max((int)$iterations, 16), 512) : 64;
         $params = isset($params) ? (array)$params : [];
 
-        // Build filename
         $fn = isset($filename) ? (string)$filename : 'procedural_' . $mode . '_' . time();
         if (!str_ends_with($fn, '.png')) {
             $fn .= '.png';
@@ -94,8 +93,11 @@ if (! function_exists('image_generator_procedural')) {
             }
         }
 
-        // Default palettes if none provided
-        if (count($palette) < 2) {
+        // Validate palette has at least 2 colors
+        $palette_count = count($palette);
+        $need_default = $palette_count < 2;
+
+        if ($need_default) {
             switch ($mode) {
                 case 'mandelbrot':
                 case 'julia':
@@ -114,11 +116,9 @@ if (! function_exists('image_generator_procedural')) {
                 default:
                     $palette = [[0,0,0], [64,64,128], [128,128,255], [255,255,255]];
             }
+            $palette_count = count($palette);
         }
 
-        $palette_count = count($palette);
-
-        // Create image
         $img = @imagecreatetruecolor($width, $height);
         if (!$img) {
             return ['error' => 'Failed to create image'];
@@ -128,7 +128,6 @@ if (! function_exists('image_generator_procedural')) {
 
         switch ($mode) {
             case 'mandelbrot':
-                // Mandelbrot set: z = z^2 + c
                 $minX = -2.5; $maxX = 1.0;
                 $minY = -1.2; $maxY = 1.2;
                 $zoom = isset($params['zoom']) ? (float)$params['zoom'] : 1.0;
@@ -162,14 +161,11 @@ if (! function_exists('image_generator_procedural')) {
                         imagesetpixel($img, $px, $py, imagecolorallocate($img, $c[0], $c[1], $c[2]));
                     }
                 }
-                $pixel_count = $width * $height;
                 break;
                 
             case 'julia':
-                // Julia set: z = z^2 + c  (c is the Julia parameter)
                 $julia_cx = isset($params['cx']) ? (float)$params['cx'] : -0.7;
                 $julia_cy = isset($params['cy']) ? (float)$params['cy'] : 0.27;
-                
                 $minX = -1.5; $maxX = 1.5;
                 $minY = -1.5; $maxY = 1.5;
                 
@@ -179,8 +175,7 @@ if (! function_exists('image_generator_procedural')) {
                         $zx = $minX + ($px / $width) * ($maxX - $minX);
                         $i = 0;
                         while ($i < $iterations) {
-                            $zx2 = $zx * $zx;
-                            $zy2 = $zy * $zy;
+                            $zx2 = $zx * $zx; $zy2 = $zy * $zy;
                             if ($zx2 + $zy2 > 4.0) break;
                             $zy = 2.0 * $zx * $zy + $julia_cy;
                             $zx = $zx2 - $zy2 + $julia_cx;
@@ -192,11 +187,9 @@ if (! function_exists('image_generator_procedural')) {
                         imagesetpixel($img, $px, $py, imagecolorallocate($img, $c[0], $c[1], $c[2]));
                     }
                 }
-                $pixel_count = $width * $height;
                 break;
                 
             case 'gradient':
-                // Linear or radial gradient
                 $angle = isset($params['angle']) ? (float)$params['angle'] : 0.0;
                 $radian = deg2rad($angle);
                 $cos = cos($radian);
@@ -217,20 +210,15 @@ if (! function_exists('image_generator_procedural')) {
                         imagesetpixel($img, $x, $y, imagecolorallocate($img, $c[0], $c[1], $c[2]));
                     }
                 }
-                $pixel_count = $width * $height;
                 break;
                 
             case 'plasma':
-                // Plasma fractal cloud effect
                 $size = max($width, $height);
                 $power = 1;
                 $plasma = array_fill(0, $height, array_fill(0, $width, 0));
-                
-                // Simple diamond-square plasma
                 $step = $size;
                 while ($step > 1) {
                     $half = (int)($step / 2);
-                    // Square step
                     for ($y = $half; $y < $height + $half; $y += $step) {
                         for ($x = $half; $x < $width + $half; $x += $step) {
                             $avg = 0; $count = 0;
@@ -238,19 +226,14 @@ if (! function_exists('image_generator_procedural')) {
                             foreach ($samples as $s) {
                                 $sx = $x + $s[0]; $sy = $y + $s[1];
                                 if ($sx >= 0 && $sx < $width && $sy >= 0 && $sy < $height) {
-                                    $avg += $plasma[$sy][$sx];
-                                    $count++;
+                                    $avg += $plasma[$sy][$sx]; $count++;
                                 }
                             }
                             if ($count > 0) {
-                                $avg = (int)($avg / $count);
-                                $px = min(max($x, 0), $width - 1);
-                                $py = min(max($y, 0), $height - 1);
-                                $plasma[$py][$px] = $avg + rand(-$power, $power);
+                                $plasma[min(max($y,0),$height-1)][min(max($x,0),$width-1)] = (int)($avg / $count) + rand(-$power, $power);
                             }
                         }
                     }
-                    // Diamond step
                     for ($y = 0; $y < $height; $y += $half) {
                         for ($x = ($y + $half) % $step; $x < $width; $x += $step) {
                             $avg = 0; $count = 0;
@@ -258,13 +241,11 @@ if (! function_exists('image_generator_procedural')) {
                             foreach ($samples as $s) {
                                 $sx = $x + $s[0]; $sy = $y + $s[1];
                                 if ($sx >= 0 && $sx < $width && $sy >= 0 && $sy < $height) {
-                                    $avg += $plasma[$sy][$sx];
-                                    $count++;
+                                    $avg += $plasma[$sy][$sx]; $count++;
                                 }
                             }
                             if ($count > 0) {
-                                $avg = (int)($avg / $count);
-                                $plasma[min(max($y,0),$height-1)][min(max($x,0),$width-1)] = $avg + rand(-$power, $power);
+                                $plasma[min(max($y,0),$height-1)][min(max($x,0),$width-1)] = (int)($avg / $count) + rand(-$power, $power);
                             }
                         }
                     }
@@ -272,7 +253,6 @@ if (! function_exists('image_generator_procedural')) {
                     $step = $half;
                 }
                 
-                // Normalize and render
                 $min_v = PHP_INT_MAX; $max_v = PHP_INT_MIN;
                 for ($y = 0; $y < $height; $y++) {
                     for ($x = 0; $x < $width; $x++) {
@@ -293,11 +273,9 @@ if (! function_exists('image_generator_procedural')) {
                         imagesetpixel($img, $x, $y, imagecolorallocate($img, $c[0], $c[1], $c[2]));
                     }
                 }
-                $pixel_count = $width * $height;
                 break;
                 
             case 'spiral':
-                // Color spiral
                 $turns = isset($params['turns']) ? (float)$params['turns'] : 3.0;
                 $center_x = $width / 2;
                 $center_y = $height / 2;
@@ -316,11 +294,9 @@ if (! function_exists('image_generator_procedural')) {
                         imagesetpixel($img, $x, $y, imagecolorallocate($img, $c[0], $c[1], $c[2]));
                     }
                 }
-                $pixel_count = $width * $height;
                 break;
                 
             case 'noise':
-                // Random noise texture
                 $seed = isset($params['seed']) ? (int)$params['seed'] : random_int(0, 99999);
                 srand($seed);
                 for ($y = 0; $y < $height; $y++) {
@@ -332,11 +308,9 @@ if (! function_exists('image_generator_procedural')) {
                         imagesetpixel($img, $x, $y, imagecolorallocate($img, $c[0], $c[1], $c[2]));
                     }
                 }
-                $pixel_count = $width * $height;
                 break;
                 
             case 'checkerboard':
-                // Checkerboard pattern
                 $cell_size = isset($params['cell_size']) ? max(2, (int)$params['cell_size']) : 32;
                 $color_a = $palette[0] ?? [0,0,0];
                 $color_b = $palette[1] ?? [255,255,255];
@@ -347,20 +321,16 @@ if (! function_exists('image_generator_procedural')) {
                     for ($x = 0; $x < $width; $x++) {
                         $cell_x = intdiv($x, $cell_size);
                         $cell_y = intdiv($y, $cell_size);
-                        $is_even = (($cell_x + $cell_y) % 2) === 0;
-                        imagesetpixel($img, $x, $y, $is_even ? $ca : $cb);
+                        imagesetpixel($img, $x, $y, ((($cell_x + $cell_y) % 2) === 0) ? $ca : $cb);
                     }
                 }
-                $pixel_count = $width * $height;
                 break;
                 
             case 'circles':
-                // Overlapping circles
                 $count = isset($params['count']) ? min(max((int)$params['count'], 1), 200) : 20;
                 $min_r = isset($params['min_radius']) ? max(5, (int)$params['min_radius']) : 10;
                 $max_r = isset($params['max_radius']) ? min(max(10, (int)$params['max_radius']), max($width, $height)) : 80;
                 
-                // Fill background with first palette color
                 $bg_c = $palette[0] ?? [0,0,0];
                 imagefill($img, 0, 0, imagecolorallocate($img, $bg_c[0], $bg_c[1], $bg_c[2]));
                 
@@ -372,7 +342,6 @@ if (! function_exists('image_generator_procedural')) {
                     $color = imagecolorallocatealpha($img, $ci[0], $ci[1], $ci[2], 60);
                     imagefilledellipse($img, $cx, $cy, $r * 2, $r * 2, $color);
                 }
-                $pixel_count = $width * $height;
                 break;
                 
             default:
@@ -380,7 +349,6 @@ if (! function_exists('image_generator_procedural')) {
                 return ['error' => "Unknown mode: {$mode}"];
         }
 
-        // Save the image
         $saved = @imagepng($img, $output_path);
         $elapsed = round((microtime(true) - $start_time) * 1000, 1);
         imagedestroy($img);
@@ -389,7 +357,6 @@ if (! function_exists('image_generator_procedural')) {
             return ['error' => "Failed to save image to {$output_path}"];
         }
 
-        // Get file info
         $file_size = @filesize($output_path);
 
         return [
@@ -399,7 +366,6 @@ if (! function_exists('image_generator_procedural')) {
             'mode' => $mode,
             'width' => $width,
             'height' => $height,
-            'pixels' => $pixel_count,
             'file_size_bytes' => $file_size ?: 0,
             'generation_time_ms' => $elapsed,
             'palette_colors' => $palette_count,
