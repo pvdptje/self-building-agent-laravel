@@ -85,8 +85,12 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 65. Model validation — perfect parameter recovery
 66. **Linear vs periodic failure** — linear R²=0.03 on sine wave.
     Proves linear models cannot capture cyclic data.
-67. **Polynomial vs periodic failure** — cubic R²=0.10, still fails.
-    Low-degree polynomials need Fourier basis for periodicity.
-    First model-limitation demonstration pipeline.
+67. Polynomial vs periodic — model limitation
+68. **Magnitude ranking** — data_rank: Fiji M5.8=rank 15, M5.0 tied at rank 1.
+69. Regional frequency — seismicity distribution
+70. Depth quantiles — nonparametric distribution
+71. **Percentile ranking** — data_rank: percentile method confirms Fiji=top.
+72. **Depth binning** — data_bin_sorter: Shallow=9, Intermediate=3, Deep=2,
+    Ultra-deep=1 (Fiji). First tectonic depth classification pipeline.
 
-## Final — 67 frontiers. 37 reports. 58 tools. 35 domains. 0 new tools.
+## Final — 72 frontiers. 37 reports. 63 tools. 40 domains. 0 new tools.
