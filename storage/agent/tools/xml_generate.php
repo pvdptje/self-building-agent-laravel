@@ -67,111 +67,59 @@ if (! function_exists('xml_generate')) {
         $cdata = $cdata ?? false;
         $version = isset($version) ? (string)$version : '1.0';
 
-        if ($data === null) {
-            return ['error' => 'data is required.', 'success' => false];
-        }
-
-        // Decode JSON string if needed
+        if ($data === null) return ['error' => 'data is required.', 'success' => false];
         if (is_string($data)) {
             $decoded = json_decode($data, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $data = $decoded;
-            }
-            // If not valid JSON, treat as a single string value
+            if (json_last_error() === JSON_ERROR_NONE) $data = $decoded;
         }
+        if (is_object($data)) $data = json_decode(json_encode($data), true);
+        if (!is_array($data)) $data = ['value' => $data];
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_:-]*$/', $root)) return ['error' => "Invalid root: '$root'", 'success' => false];
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_:-]*$/', $row)) return ['error' => "Invalid row: '$row'", 'success' => false];
 
-        // Normalize to array
-        if (is_object($data)) {
-            $data = json_decode(json_encode($data), true);
-        }
-
-        if (!is_array($data)) {
-            // Wrap scalar in array
-            $data = ['value' => $data];
-        }
-
-        // Validate root element name
-        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_:-]*$/', $root)) {
-            return ['error' => "Invalid root element name: '{$root}'. Must start with letter or underscore.", 'success' => false];
-        }
-        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_:-]*$/', $row)) {
-            return ['error' => "Invalid row element name: '{$row}'.", 'success' => false];
-        }
-
-        // Check if data looks like a flat list (numeric keys)
         $is_list = array_is_list($data);
-        $single_child = !$is_list && count($data) === 1 && isset($data['_']);
-
         $xml = '<?xml version="' . $version . '" encoding="' . $encoding . '"?' . ">\n";
-
         $indent = $pretty ? '  ' : '';
+        $nl = $pretty ? "\n" : '';
 
-        $toXml = function($value, $tagName, $depth = 0) use (&$toXml, $row, $pretty, $cdata, $indent) {
-            $i = $pretty ? str_repeat($indent, $depth) : '';
-            $nl = $pretty ? "\n" : '';
+        $toXml = function($value, $tagName, $depth = 0) use (&$toXml, $row, $cdata, $indent, $nl) {
+            $i = $pretty ?? true ? ($indent ? str_repeat('  ', $depth) : '') : '';
             
-            if ($value === null || $value === '') {
-                return $i . '<' . $tagName . '/>' . $nl;
-            }
+            if ($value === null || $value === '') return $i . '<' . $tagName . '/>' . $nl;
             
             if (is_bool($value)) {
                 $str = $value ? 'true' : 'false';
             } elseif (is_array($value)) {
-                // Check for attributes (keys starting with @)
-                $attrs = '';
-                $content = null;
-                $children = [];
-                $has_numeric = false;
-                
+                $attrs = ''; $content = null; $children = [];
                 foreach ($value as $k => $v) {
                     if ((string)$k === '') continue;
-                    if ($k[0] === '@') {
+                    if (is_string($k) && strlen($k) > 0 && $k[0] === '@') {
                         $attrs .= ' ' . substr($k, 1) . '="' . htmlspecialchars((string)$v, ENT_QUOTES | ENT_XML1) . '"';
                     } elseif ($k === '_') {
                         $content = $v;
                     } else {
                         $children[$k] = $v;
                     }
-                    if (is_int($k)) $has_numeric = true;
                 }
-                
                 if ($content !== null && empty($children)) {
-                    // Simple element with text content and optional attributes
                     $str = htmlspecialchars((string)$content, ENT_QUOTES | ENT_XML1);
                     if ($cdata) $str = '<![CDATA[' . $content . ']]>';
                     return $i . '<' . $tagName . $attrs . '>' . $str . '</' . $tagName . '>' . $nl;
                 }
-                
-                if (empty($children)) {
-                    return $i . '<' . $tagName . $attrs . '/>' . $nl;
-                }
-                
-                // Check if all children have numeric keys (it's a list)
-                $all_numeric = true;
-                foreach ($children as $k => $v) {
-                    if (!is_int($k)) { $all_numeric = false; break; }
-                }
-                
+                if (empty($children)) return $i . '<' . $tagName . $attrs . '/>' . $nl;
                 $result = $i . '<' . $tagName . $attrs . '>' . $nl;
-                
                 if ($content !== null) {
                     $str = htmlspecialchars((string)$content, ENT_QUOTES | ENT_XML1);
                     if ($cdata) $str = '<![CDATA[' . $content . ']]>';
                     $result .= $i . $indent . $str . $nl;
                 }
-                
                 foreach ($children as $k => $v) {
                     $childTag = is_int($k) ? $row : $k;
-                    if (is_array($v) && !empty($v)) {
-                        // Check if this sub-array is also a list
-                        $sub_all_numeric = true;
-                        foreach ($v as $sk => $sv) {
-                            if (!is_int($sk)) { $sub_all_numeric = false; break; }
-                        }
-                        if ($sub_all_numeric && count($v) > 0) {
-                            foreach ($v as $sv) {
-                                $result .= $toXml($sv, $childTag, $depth + 1);
-                            }
+                    if (is_array($v)) {
+                        $all_num = true;
+                        foreach ($v as $sk => $sv) { if (!is_int($sk)) { $all_num = false; break; } }
+                        if ($all_num && count($v) > 0) {
+                            foreach ($v as $sv) $result .= $toXml($sv, $childTag, $depth + 1);
                         } else {
                             $result .= $toXml($v, $childTag, $depth + 1);
                         }
@@ -179,34 +127,23 @@ if (! function_exists('xml_generate')) {
                         $result .= $toXml($v, $childTag, $depth + 1);
                     }
                 }
-                
                 $result .= $i . '</' . $tagName . '>' . $nl;
                 return $result;
             } else {
                 $str = htmlspecialchars((string)$value, ENT_QUOTES | ENT_XML1);
                 if ($cdata) $str = '<![CDATA[' . (string)$value . ']]>';
             }
-            
             return $i . '<' . $tagName . '>' . $str . '</' . $tagName . '>' . $nl;
         };
 
         if ($is_list) {
             $xml .= '<' . $root . '>' . $nl;
-            foreach ($data as $item) {
-                $xml .= $toXml($item, $row, 1);
-            }
+            foreach ($data as $item) $xml .= $toXml($item, $row, 1);
             $xml .= '</' . $root . '>' . $nl;
         } else {
             $xml .= $toXml($data, $root, 0);
         }
 
-        return [
-            'success' => true,
-            'xml' => $xml,
-            'length' => strlen($xml),
-            'root' => $root,
-            'encoding' => $encoding,
-            'lists_as' => $row,
-        ];
+        return ['success' => true, 'xml' => $xml, 'length' => strlen($xml), 'root' => $root, 'encoding' => $encoding, 'lists_as' => $row];
     }
 }
