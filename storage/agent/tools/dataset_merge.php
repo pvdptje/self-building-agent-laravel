@@ -89,180 +89,97 @@ $toolDefinition_dataset_merge = array (
 if (! function_exists('dataset_merge')) {
     function dataset_merge($db_primary, $db_secondary, $table_primary, $table_secondary, $join_column_p, $join_column_s = null, $join_type = null, $columns_p = null, $columns_s = null, $max_rows = null, $output_db = null, $output_table = null)
     {
-            $db_primary = $db_primary ?? '';
-            $db_secondary = $db_secondary ?? '';
-            $table_primary = $table_primary ?? '';
-            $table_secondary = $table_secondary ?? '';
-            $join_column_p = $join_column_p ?? '';
-            $join_column_s = $join_column_s ?? '';
-            $join_type = $join_type ?? 'inner';
-            $columns_p = $columns_p ?? '';
-            $columns_s = $columns_s ?? '';
-            $max_rows = $max_rows ?? 100;
-            $output_db = $output_db ?? '';
-            $output_table = $output_table ?? 'merged_data';
+        // Dataset Merge - SQL JOIN across two SQLite databases using ATTACH
+        $db_p = isset($db_primary)?(string)$db_primary:'';
+        $db_s = isset($db_secondary)?(string)$db_secondary:'';
+        $tbl_p = isset($table_primary)?(string)$table_primary:'';
+        $tbl_s = isset($table_secondary)?(string)$table_secondary:'';
+        $col_p = isset($join_column_p)?(string)$join_column_p:'';
+        $col_s = isset($join_column_s)?(string)$join_column_s:$col_p;
+        $join_type = isset($join_type)?strtolower((string)$join_type):'inner';
+        $cols_p = isset($columns_p)?(string)$columns_p:'*';
+        $cols_s = isset($columns_s)?(string)$columns_s:'*';
+        $max_rows = isset($max_rows)?max(0,(int)$max_rows):100;
+        $out_db = isset($output_db)?(string)$output_db:'';
+        $out_tbl = isset($output_table)?(string)$output_table:'merged_data';
 
-            if (empty($join_column_s)) $join_column_s = $join_column_p;
+        if ($db_p === '' || $db_s === '' || $tbl_p === '' || $tbl_s === '' || $col_p === '') {
+            return ['error' => 'db_primary, db_secondary, table_primary, table_secondary, and join_column_p are required'];
+        }
 
-            $max_rows = max(0, min(10000, (int)$max_rows));
-            $join_type = strtolower(trim($join_type));
-            $valid_types = ['inner', 'left', 'cross'];
-            if (!in_array($join_type, $valid_types)) $join_type = 'inner';
+        $valid_joins = ['inner', 'left', 'cross'];
+        if (!in_array($join_type, $valid_joins)) $join_type = 'inner';
 
-            if (empty($db_primary) || empty($db_secondary) || empty($table_primary) || empty($table_secondary) || empty($join_column_p)) {
-                return ['success' => false, 'error' => 'db_primary, db_secondary, table_primary, table_secondary, and join_column_p are required.'];
-            }
+        $ws = realpath(__DIR__ . '/../../workspace');
+        $db_p_path = $ws . '/' . $db_p;
+        $db_s_path = $ws . '/' . $db_s;
 
-            $workspace = __DIR__ . '/../workspace';
-            $path_p = $workspace . '/' . basename($db_primary);
-            $path_s = $workspace . '/' . basename($db_secondary);
+        if (!file_exists($db_p_path)) return ['error' => "Primary DB not found: {$db_p}"];
+        if (!file_exists($db_s_path)) return ['error' => "Secondary DB not found: {$db_s}"];
 
-            if (!file_exists($path_p)) return ['success' => false, 'error' => "Primary database not found: $db_primary"];
-            if (!file_exists($path_s)) return ['success' => false, 'error' => "Secondary database not found: $db_secondary"];
-
-            try {
-                $pdo = new PDO("sqlite:$path_p");
-                $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-                $safe_s_path = str_replace('\\', '/', $path_s);
-                $pdo->exec("ATTACH DATABASE '{$safe_s_path}' AS db2");
-
-                // Verify tables exist
-                $check1 = $pdo->query("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=" . $pdo->quote($table_primary))->fetchColumn();
-                if (!$check1) {
-                    $pdo->exec("DETACH DATABASE db2");
-                    return ['success' => false, 'error' => "Table '$table_primary' not found in primary database."];
-                }
-                $check2 = $pdo->query("SELECT count(*) FROM db2.sqlite_master WHERE type='table' AND name=" . $pdo->quote($table_secondary))->fetchColumn();
-                if (!$check2) {
-                    $pdo->exec("DETACH DATABASE db2");
-                    return ['success' => false, 'error' => "Table '$table_secondary' not found in secondary database."];
-                }
-
-                // Get column names
-                $p_cols_stmt = $pdo->query("PRAGMA table_info(" . $pdo->quote($table_primary) . ")");
-                $p_cols = $p_cols_stmt->fetchAll(PDO::FETCH_COLUMN, 1);
-                $s_cols_stmt = $pdo->query("PRAGMA db2.table_info(" . $pdo->quote($table_secondary) . ")");
-                $s_cols = $s_cols_stmt->fetchAll(PDO::FETCH_COLUMN, 1);
-
-                if (!in_array($join_column_p, $p_cols)) {
-                    $pdo->exec("DETACH DATABASE db2");
-                    return ['success' => false, 'error' => "Column '$join_column_p' not found in primary table."];
-                }
-                if (!in_array($join_column_s, $s_cols)) {
-                    $pdo->exec("DETACH DATABASE db2");
-                    return ['success' => false, 'error' => "Column '$join_column_s' not found in secondary table."];
-                }
-
-                // Build column selections
-                $p_sel_list = empty($columns_p) ? $p_cols : array_map('trim', explode(',', $columns_p));
-                $s_sel_list = empty($columns_s) ? $s_cols : array_map('trim', explode(',', $columns_s));
-
-                // Build JOIN clause
-                $join_sql = '';
-                if ($join_type === 'left') $join_sql = 'LEFT JOIN';
-                elseif ($join_type === 'cross') $join_sql = 'CROSS JOIN';
-                else $join_sql = 'JOIN';
-
-                // Build SELECT list with column aliases
-                $select_parts = [];
-                foreach ($p_sel_list as $c) {
-                    $select_parts[] = "t1.\"{$c}\" AS \"{$c}\"";
-                }
-                foreach ($s_sel_list as $c) {
-                    $select_parts[] = "t2.\"{$c}\" AS \"{$c} (right)\"";
-                }
-                $select_sql = implode(', ', $select_parts);
-
-                // Quote table names safely
-                $t1 = '"' . $table_primary . '"';
-                $t2 = '"' . $table_secondary . '"';
-
-                $sql = "SELECT {$select_sql} FROM {$t1} t1 {$join_sql} db2.{$t2} t2 ON t1.\"{$join_column_p}\" = t2.\"{$join_column_s}\"";
-                if ($max_rows > 0) $sql .= " LIMIT " . $max_rows;
-
-                $start_time = microtime(true);
-                $stmt = $pdo->query($sql);
-                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $elapsed_ms = round((microtime(true) - $start_time) * 1000, 1);
-
-                // Get result column names
-                $result_columns = [];
-                if (!empty($rows)) {
-                    $result_columns = array_keys($rows[0]);
-                }
-
-                // Row counts
-                $count_p = (int)$pdo->query("SELECT count(*) FROM {$t1}")->fetchColumn();
-                $count_s = (int)$pdo->query("SELECT count(*) FROM db2.{$t2}")->fetchColumn();
-
-                // Matched count
-                $match_sql = "SELECT count(*) FROM {$t1} t1 {$join_sql} db2.{$t2} t2 ON t1.\"{$join_column_p}\" = t2.\"{$join_column_s}\"";
-                $match_count = (int)$pdo->query($match_sql)->fetchColumn();
-
-                // Create output database if requested
-                $output_created = null;
-                if (!empty($output_db) && !empty($rows)) {
-                    $out_path = $workspace . '/' . basename($output_db);
-                    try {
-                        $pdo_out = new PDO("sqlite:$out_path");
-                        $pdo_out->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-                        $col_defs = [];
-                        foreach ($result_columns as $rc) {
-                            $col_defs[] = "\"{$rc}\" TEXT";
-                        }
-                        $pdo_out->exec("DROP TABLE IF EXISTS \"{$output_table}\"");
-                        $pdo_out->exec("CREATE TABLE \"{$output_table}\" (" . implode(', ', $col_defs) . ")");
-
-                        $placeholders = implode(', ', array_fill(0, count($result_columns), '?'));
-                        $col_list = '"' . implode('", "', $result_columns) . '"';
-                        $ins = $pdo_out->prepare("INSERT INTO \"{$output_table}\" ({$col_list}) VALUES ({$placeholders})");
-
-                        $inserted = 0;
-                        foreach ($rows as $row) {
-                            $vals = [];
-                            foreach ($result_columns as $rc) {
-                                $vals[] = $row[$rc] ?? null;
-                            }
-                            $ins->execute($vals);
-                            $inserted++;
-                        }
-
-                        $output_created = [
-                            'database' => $output_db,
-                            'table' => $output_table,
-                            'rows_inserted' => $inserted,
-                        ];
-                    } catch (Exception $e) {
-                        $output_created = ['error' => $e->getMessage()];
+        try {
+            // Open primary DB, attach secondary
+            $pdo = new PDO("sqlite:{$db_p_path}");
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $pdo->exec("ATTACH DATABASE '{$db_s_path}' AS secondary");
+            
+            // Sanitize identifiers
+            $safe_tbl_p = '"' . str_replace('"', '""', $tbl_p) . '"';
+            $safe_tbl_s = '"secondary"."' . str_replace('"', '""', $tbl_s) . '"';
+            $safe_col_p = '"' . str_replace('"', '""', $col_p) . '"';
+            $safe_col_s = '"' . str_replace('"', '""', $col_s) . '"';
+            
+            $sql = "SELECT {$safe_tbl_p}.{$cols_p}, {$safe_tbl_s}.{$cols_s} 
+                    FROM {$safe_tbl_p} {$join_type} JOIN {$safe_tbl_s} 
+                    ON {$safe_tbl_p}.{$safe_col_p} = {$safe_tbl_s}.{$safe_col_s}";
+            
+            if ($max_rows > 0) $sql .= " LIMIT {$max_rows}";
+            
+            $stmt = $pdo->query($sql);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            $result = [
+                'success' => true,
+                'operation' => 'join',
+                'join_type' => $join_type,
+                'primary_db' => $db_p,
+                'secondary_db' => $db_s,
+                'tables' => "{$tbl_p} {$join_type} JOIN {$tbl_s}",
+                'join_on' => "{$tbl_p}.{$col_p} = {$tbl_s}.{$col_s}",
+                'row_count' => count($rows),
+                'columns' => $rows ? array_keys($rows[0]) : [],
+                'rows' => $rows,
+            ];
+            
+            // Output to new DB if requested
+            if ($out_db !== '') {
+                $out_path = $ws . '/' . $out_db;
+                $out_pdo = new PDO("sqlite:{$out_path}");
+                $out_pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                
+                // Create table from result
+                if (count($rows) > 0) {
+                    $cols = array_keys($rows[0]);
+                    $col_defs = implode(', ', array_map(fn($c) => '"' . str_replace('"', '""', $c) . '" TEXT', $cols));
+                    $out_pdo->exec("CREATE TABLE IF NOT EXISTS \"{$out_tbl}\" ({$col_defs})");
+                    
+                    $placeholders = '(' . implode(', ', array_fill(0, count($cols), '?')) . ')';
+                    $ins_sql = "INSERT INTO \"{$out_tbl}\" VALUES {$placeholders}";
+                    foreach ($rows as $row) {
+                        $vals = array_values($row);
+                        $out_pdo->prepare($ins_sql)->execute($vals);
                     }
                 }
-
-                $pdo->exec("DETACH DATABASE db2");
-
-                return [
-                    'success' => true,
-                    'join' => [
-                        'type' => $join_type,
-                        'primary' => ['db' => $db_primary, 'table' => $table_primary],
-                        'secondary' => ['db' => $db_secondary, 'table' => $table_secondary],
-                        'condition' => "{$table_primary}.{$join_column_p} = {$table_secondary}.{$join_column_s}",
-                    ],
-                    'row_counts' => [
-                        'primary_table' => $count_p,
-                        'secondary_table' => $count_s,
-                        'matched_rows' => $match_count,
-                        'returned_rows' => count($rows),
-                        'max_rows_setting' => $max_rows,
-                    ],
-                    'columns' => $result_columns,
-                    'query_time_ms' => $elapsed_ms,
-                    'rows' => $rows,
-                    'output' => $output_created,
-                ];
-            } catch (Exception $e) {
-                return ['success' => false, 'error' => 'Merge failed: ' . $e->getMessage()];
+                
+                $result['output_db'] = $out_db;
+                $result['output_table'] = $out_tbl;
             }
+            
+            $pdo->exec("DETACH DATABASE secondary");
+            return $result;
+            
+        } catch (\Throwable $e) {
+            return ['error' => 'Merge failed: ' . $e->getMessage()];
+        }
     }
 }
