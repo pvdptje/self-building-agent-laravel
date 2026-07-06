@@ -54,7 +54,9 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 36. Operational integrity — 202/202 pass, 98/100 health
 37. **Weather alert digest** — weather_alerts (CA) → 3 active alerts.
 37. Weather alert digest — 3 active CA alerts
-38. **Scheduled multi-source report** — scheduled_report (HN + weather +
-    GitHub). 3 sources, 0 errors, 2.5KB markdown. First automated digest pipeline.
+38. Scheduled multi-source report
+39. **Operational profile** — shell_run + feed_watcher + read_file →
+    PHP 8.3.30, OPcache, http_fetch source analysis (6.2KB), HN feed active.
+    First runtime infrastructure intelligence pipeline.
 
-## Final — 38 frontiers. 33 reports. 29 tools. 15 domains. 0 new tools.
+## Final — 39 frontiers. 34 reports. 30 tools. 15 domains. 0 new tools.
