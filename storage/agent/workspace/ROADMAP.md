@@ -33,9 +33,11 @@ off, and add what you learned + the next step before finishing. When the
       Cape Town 10h), forex rates (USD→EUR 0.87, JPY 161, BRL 5.20, INR 95),
 - [x] **Web page metadata extraction** — http_fetch + manual DOM analysis →
 - [x] **Financial snapshot** — crypto_ticker × 2 + forex + country_info →
-      BTC $63,529 (-41% YoY), ETH $1,782 (-29% YoY). BTC market cap ($1.27T)
-      exceeds Brazil GDP. 1 BTC = 23 months of India GDP/capita.
-      First crypto-forex-economic cross-domain comparison.
+- [x] **Data anonymization** — sqlite_query × 3 → bulk anonymization of 5 user
+      records. Names hashed (hex/randomblob), emails masked (j***@example.com).
+      Proves data_anonymizer frontier achievable via SQLite string functions.
+
+- [x] 17 frontiers/pipelines. 14 reports in workspace.
 
 - [x] 16 frontiers/pipelines. 13 reports in workspace.
 
