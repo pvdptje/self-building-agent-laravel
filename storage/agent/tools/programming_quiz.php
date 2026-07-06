@@ -7,24 +7,190 @@ $toolDefinition_programming_quiz = array (
   'function' => 
   array (
     'name' => 'programming_quiz',
-    'description' => '[placeholder]',
+    'description' => 'Check PHP source code for syntax errors using PHP\'s built-in lint checker (php -l). Scans a single file, a directory of PHP files, or validates a code string. Returns parse errors with line numbers, file paths, and severity. Uses proc_open to run the PHP lint checker in a subprocess. First syntax validation / code quality gate in the ecosystem — prevents deploying broken code. Never throws — all errors returned as structured data.',
     'parameters' => 
     array (
       'type' => 'object',
       'properties' => 
       array (
-        'test' => 
+        'path' => 
         array (
           'type' => 'string',
+          'description' => 'Path to a PHP file or directory of PHP files to lint (relative to project root).',
         ),
+        'code' => 
+        array (
+          'type' => 'string',
+          'description' => 'PHP code string to lint (alternative to path). Writes to temp file and lints it.',
+        ),
+        'max_files' => 
+        array (
+          'type' => 'integer',
+          'description' => 'Max files to check (1-500, default: 50).',
+        ),
+        'recursive' => 
+        array (
+          'type' => 'boolean',
+          'description' => 'If true, scan directories recursively (default: true).',
+        ),
+        'timeout' => 
+        array (
+          'type' => 'integer',
+          'description' => 'Timeout in seconds (5-30, default: 15).',
+        ),
+      ),
+      'required' => 
+      array (
       ),
     ),
   ),
 );
 
 if (! function_exists('programming_quiz')) {
-    function programming_quiz($test = null)
+    function programming_quiz($path = null, $code = null, $max_files = null, $recursive = null, $timeout = null)
     {
-        return ['note'=> 'placeholder']; 
+        $path = isset($path) ? (string)$path : '';
+        $code = isset($code) ? (string)$code : '';
+        $max_files = isset($max_files) ? max(1, min(500, (int)$max_files)) : 50;
+        $recursive = $recursive ?? true;
+        $timeout = isset($timeout) ? max(5, min(30, (int)$timeout)) : 15;
+
+        if (empty($path) && empty($code)) {
+            return ['error' => 'Either path or code is required.', 'success' => false];
+        }
+
+        $lint_file = function($file_path) use ($timeout) {
+            $php_bin = PHP_BINARY;
+            if (empty($php_bin)) $php_bin = 'php';
+            
+            $cmd = sprintf('"%s" -l "%s"', $php_bin, $file_path);
+            $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+            $process = @proc_open($cmd, $descriptors, $pipes);
+            
+            if (!is_resource($process)) {
+                return ['file' => $file_path, 'valid' => false, 'error' => 'Failed to start lint process'];
+            }
+            
+            fclose($pipes[0]);
+            $stdout = stream_get_contents($pipes[1]);
+            $stderr = stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            
+            $exit_code = proc_close($process);
+            
+            $valid = ($exit_code === 0);
+            $output = trim($stdout . "\n" . $stderr);
+            
+            // Parse error from output
+            $error = null;
+            $line = null;
+            if (!$valid) {
+                if (preg_match('/Parse error:\s+(.+?)\s+in\s+/s', $output, $m)) {
+                    $error = trim($m[1]);
+                } elseif (preg_match('/Fatal error:\s+(.+?)\s+in\s+/s', $output, $m)) {
+                    $error = trim($m[1]);
+                } else {
+                    $error = mb_substr($output, 0, 200);
+                }
+                if (preg_match('/on line (\d+)/', $output, $lm)) {
+                    $line = (int)$lm[1];
+                }
+            }
+            
+            return [
+                'file' => basename($file_path),
+                'path' => $file_path,
+                'valid' => $valid,
+                'error' => $error,
+                'line' => $line,
+                'output' => $output,
+            ];
+        };
+
+        $results = [];
+        $errors = [];
+        $total = 0;
+        $start = microtime(true);
+
+        if (!empty($code)) {
+            // Lint code string — write to temp file
+            $tmp_dir = sys_get_temp_dir();
+            $tmp_file = $tmp_dir . '/phplint_' . bin2hex(random_bytes(8)) . '.php';
+            file_put_contents($tmp_file, $code);
+            $result = $lint_file($tmp_file);
+            @unlink($tmp_file);
+            $result['type'] = 'code_string';
+            $result['size'] = strlen($code);
+            $results[] = $result;
+            $total = 1;
+            if (!$result['valid']) $errors[] = $result;
+            $elapsed = round((microtime(true) - $start) * 1000, 1);
+            
+            return [
+                'success' => true, 'mode' => 'code', 'total' => 1,
+                'valid_count' => $result['valid'] ? 1 : 0,
+                'error_count' => $result['valid'] ? 0 : 1,
+                'time_ms' => $elapsed,
+                'results' => $results,
+            ];
+        }
+
+        // Path mode — scan files
+        $project_root = realpath(__DIR__ . '/../../..');
+        if (!$project_root) return ['error' => 'Could not determine project root.', 'success' => false];
+
+        $resolved = realpath($path);
+        if (!$resolved) {
+            $try = $project_root . '/' . ltrim($path, '/\\');
+            $resolved = realpath($try);
+        }
+        if (!$resolved) return ['error' => "Path not found: $path", 'success' => false];
+
+        $files_to_check = [];
+        if (is_file($resolved)) {
+            if (strtolower(pathinfo($resolved, PATHINFO_EXTENSION)) === 'php') {
+                $files_to_check[] = $resolved;
+            }
+        } elseif (is_dir($resolved)) {
+            $iterator = $recursive
+                ? new RecursiveIteratorIterator(new RecursiveDirectoryIterator($resolved, RecursiveDirectoryIterator::SKIP_DOTS))
+                : new DirectoryIterator($resolved);
+            
+            foreach ($iterator as $item) {
+                if ($item->isFile() && strtolower($item->getExtension()) === 'php') {
+                    $files_to_check[] = $item->getRealPath();
+                    if (count($files_to_check) >= $max_files) break;
+                }
+            }
+        }
+
+        $deadline = time() + $timeout;
+
+        foreach ($files_to_check as $file) {
+            if (time() > $deadline) {
+                $results[] = ['file' => basename($file), 'path' => $file, 'valid' => false, 'error' => 'Timed out', 'skipped' => true];
+                continue;
+            }
+            $r = $lint_file($file);
+            $results[] = $r;
+            $total++;
+            if (!$r['valid']) $errors[] = $r;
+        }
+
+        $valid_count = $total - count($errors);
+        $elapsed = round((microtime(true) - $start) * 1000, 1);
+
+        return [
+            'success' => true,
+            'mode' => 'path',
+            'path' => $path,
+            'total' => $total,
+            'valid_count' => $valid_count,
+            'error_count' => count($errors),
+            'has_errors' => count($errors) > 0,
+            'time_ms' => $elapsed,
+            'results' => $results,
+        ];
     }
 }
