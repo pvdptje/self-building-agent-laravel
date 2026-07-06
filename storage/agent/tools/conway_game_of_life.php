@@ -57,9 +57,6 @@ $toolDefinition_conway_game_of_life = array (
           'description' => 'Character for dead cells (default: \' \')',
         ),
       ),
-      'required' => 
-      array (
-      ),
     ),
   ),
 );
@@ -67,152 +64,73 @@ $toolDefinition_conway_game_of_life = array (
 if (! function_exists('conway_game_of_life')) {
     function conway_game_of_life($pattern = null, $width = null, $height = null, $steps = null, $custom_grid = null, $alive_char = null, $dead_char = null)
     {
-        $w = $width ?? 20;
-        $h = $height ?? 20;
-        $steps = $steps ?? 10;
-        $pat = $pattern ?? 'glider';
-        $alive = $alive_char ?? '█';
-        $dead = $dead_char ?? ' ';
+        // Conway's Game of Life
+        $pattern=isset($pattern)?(string)$pattern:'glider';
+        $width=isset($width)?min(max((int)$width,3),100):20;
+        $height=isset($height)?min(max((int)$height,3),100):20;
+        $steps=isset($steps)?min(max((int)$steps,0),500):10;
+        $alive=isset($alive_char)?(string)$alive_char:'█';
+        $dead=isset($dead_char)?(string)$dead_char:' ';
 
-        $w = max(3, min(100, $w));
-        $h = max(3, min(100, $h));
-        $steps = max(0, min(200, $steps));
+        $grid=[];
 
-        // Initialize grid
-        if ($pat === 'custom' && !empty($custom_grid)) {
-            $grid = $custom_grid;
-            $h = count($grid);
-            $w = count($grid[0]);
-        } else {
-            $grid = array_fill(0, $h, array_fill(0, $w, 0));
-            
-            $placePattern = function($cells) use (&$grid) {
-                foreach ($cells as $c) {
-                    $r = $c[0]; $c2 = $c[1];
-                    if (isset($grid[$r]) && isset($grid[$r][$c2])) {
-                        $grid[$r][$c2] = 1;
-                    }
+        // Init grid from pattern or custom
+        if($pattern==='custom'&&isset($custom_grid)&&is_array($custom_grid)){
+            $grid=$custom_grid;
+        }else{
+            $grid=array_fill(0,$height,array_fill(0,$width,0));
+            $patterns=[
+                'glider'=>[[0,1],[1,2],[2,0],[2,1],[2,2]],
+                'blinker'=>[[1,0],[1,1],[1,2]],
+                'block'=>[[0,0],[0,1],[1,0],[1,1]],
+                'beacon'=>[[0,0],[0,1],[1,0],[2,3],[3,2],[3,3]],
+                'pulsar'=>[[0,2],[0,3],[0,4],[2,0],[2,5],[3,0],[3,5],[4,0],[4,5],[5,2],[5,3],[5,4]],
+                'glider_gun'=>[[0,24],[1,22],[1,24],[2,12],[2,13],[2,20],[2,21],[2,34],[2,35],[3,11],[3,15],[3,20],[3,21],[3,34],[3,35],[4,0],[4,1],[4,10],[4,16],[4,20],[4,21],[5,0],[5,1],[5,10],[5,14],[5,16],[5,17],[5,22],[5,24],[6,10],[6,16],[6,24],[7,11],[7,15],[8,12],[8,13]],
+            ];
+            if(isset($patterns[$pattern])){
+                foreach($patterns[$pattern] as$cell){
+                    $r=$cell[0];$c=$cell[1];
+                    if($r<$height&&$c<$width)$grid[$r][$c]=1;
                 }
-            };
-            
-            switch ($pat) {
-                case 'glider':
-                    $placePattern([[0,1],[1,2],[2,0],[2,1],[2,2]]);
-                    break;
-                case 'blinker':
-                    $cy = (int)($h/2); $cx = (int)($w/2);
-                    $placePattern([[$cy-1,$cx],[$cy,$cx],[$cy+1,$cx]]);
-                    break;
-                case 'block':
-                    $cy = (int)($h/2); $cx = (int)($w/2);
-                    $placePattern([[$cy,$cx],[$cy,$cx+1],[$cy+1,$cx],[$cy+1,$cx+1]]);
-                    break;
-                case 'beacon':
-                    $cy = (int)($h/2); $cx = (int)($w/2);
-                    $placePattern([[$cy,$cx],[$cy,$cx+1],[$cy+1,$cx],[$cy+1,$cx+1],
-                                  [$cy+2,$cx+2],[$cy+2,$cx+3],[$cy+3,$cx+2],[$cy+3,$cx+3]]);
-                    break;
-                case 'pulsar':
-                    $cy = (int)($h/2) - 3; $cx = (int)($w/2) - 3;
-                    $p = [[0,2],[0,3],[0,4],[2,0],[2,5],[3,0],[3,5],[4,0],[4,5],[5,2],[5,3],[5,4]];
-                    $all = [];
-                    foreach ($p as $c) { $all[] = [$cy + $c[0], $cx + $c[1]]; }
-                    foreach ($p as $c) { $all[] = [$cy - $c[0], $cx + $c[1]]; }
-                    foreach ($p as $c) { $all[] = [$cy + $c[0], $cx - $c[1]]; }
-                    foreach ($p as $c) { $all[] = [$cy - $c[0], $cx - $c[1]]; }
-                    $placePattern($all);
-                    break;
-                case 'glider_gun':
-                    $cy = (int)($h/2) - 5; $cx = (int)($w/2) - 10;
-                    $gun = [[0,2],[0,3],[1,1],[1,5],[2,0],[2,6],[3,0],[3,6],[4,1],[4,5],[5,2],[5,3],[5,4],
-                            [6,4],[7,3],[8,2],[10,12],[10,13],[11,11],[11,15],[12,10],[12,16],[13,10],[13,14],[13,16],[13,17],[14,10],[14,16],[15,11],[15,15],[16,12],[16,13]];
-                    $placePattern(array_map(function($c) use ($cy, $cx) { return [$cy + $c[0], $cx + $c[1]]; }, $gun));
-                    break;
-                case 'random':
-                    srand($pat === 'random' ? crc32('gol_random') : 0);
-                    for ($r = 0; $r < $h; $r++) {
-                        for ($c = 0; $c < $w; $c++) {
-                            $grid[$r][$c] = rand(0, 1);
-                        }
-                    }
-                    break;
+            }else{
+                // Random
+                for($r=0;$r<$height;$r++)
+                    for($c=0;$c<$width;$c++)
+                        $grid[$r][$c]=rand(0,1);
             }
         }
 
-        // Copy for simulation
-        $current = $grid;
-        $frames = [$current];
-
-        for ($step = 0; $step < $steps; $step++) {
-            $next = $current;
-            for ($r = 0; $r < $h; $r++) {
-                for ($c = 0; $c < $w; $c++) {
-                    $neighbors = 0;
-                    for ($dr = -1; $dr <= 1; $dr++) {
-                        for ($dc = -1; $dc <= 1; $dc++) {
-                            if ($dr === 0 && $dc === 0) continue;
-                            $nr = $r + $dr;
-                            $nc = $c + $dc;
-                            if ($nr >= 0 && $nr < $h && $nc >= 0 && $nc < $w) {
-                                $neighbors += $current[$nr][$nc];
+        // Simulate
+        $history=[];
+        for($s=0;$s<$steps;$s++){
+            $new=array_fill(0,$height,array_fill(0,$width,0));
+            $alive_count=0;
+            for($r=0;$r<$height;$r++){
+                for($c=0;$c<$width;$c++){
+                    $n=0;
+                    for($dr=-1;$dr<=1;$dr++)
+                        for($dc=-1;$dc<=1;$dc++)
+                            if(!($dr===0&&$dc===0)){
+                                $nr=$r+$dr;$nc=$c+$dc;
+                                if($nr>=0&&$nr<$height&&$nc>=0&&$nc<$width&&$grid[$nr][$nc])$n++;
                             }
-                        }
-                    }
-                    if ($current[$r][$c] === 1) {
-                        $next[$r][$c] = ($neighbors === 2 || $neighbors === 3) ? 1 : 0;
-                    } else {
-                        $next[$r][$c] = ($neighbors === 3) ? 1 : 0;
-                    }
+                    if($grid[$r][$c]){$new[$r][$c]=($n===2||$n===3)?1:0;}
+                    else{$new[$r][$c]=($n===3)?1:0;}
+                    if($new[$r][$c])$alive_count++;
                 }
             }
-            $current = $next;
-            $frames[] = $current;
+            $history[]=['step'=>$s+1,'alive'=>$alive_count];
+            if($alive_count===0)break;
+            $grid=$new;
         }
 
-        // Render frames as ASCII strings
-        $renderedFrames = [];
-        foreach ($frames as $f) {
-            $lines = [];
-            foreach ($f as $row) {
-                $line = '';
-                foreach ($row as $cell) {
-                    $line .= $cell ? $alive : $dead;
-                }
-                $lines[] = $line;
-            }
-            $renderedFrames[] = implode("\n", $lines);
+        // Render
+        $out='';
+        for($r=0;$r<$height;$r++){
+            for($c=0;$c<$width;$c++)$out.=$grid[$r][$c]?$alive:$dead;
+            $out.="\n";
         }
 
-        // Count populations
-        $populations = [];
-        foreach ($frames as $fi => $f) {
-            $pop = 0;
-            foreach ($f as $row) $pop += array_sum($row);
-            $populations[] = $pop;
-        }
-
-        $finalPop = array_sum(array_map('array_sum', $current));
-
-        return json_encode([
-            'pattern' => $pat,
-            'width' => $w,
-            'height' => $h,
-            'steps_simulated' => $steps,
-            'final_population' => $finalPop,
-            'populations' => $populations,
-            'populations_min' => min($populations),
-            'populations_max' => max($populations),
-            'extinct' => $finalPop === 0,
-            'stable' => $steps >= 2 && $frames[$steps] === $frames[$steps-1],
-            'initial_grid' => $renderedFrames[0],
-            'final_grid' => $renderedFrames[$steps],
-            'all_frames' => $renderedFrames,
-            'grid_data' => $current, // 2D array of 0/1 for further processing
-            'next_steps' => [
-                "Pass 'grid_data' to data_heatmap for a shaded visualization.",
-                "Pass 'final_grid' to write_file to save the pattern.",
-                "Compose ascii_canvas -> pattern_mixer -> conway_game_of_life for pattern experiments."
-            ],
-        ]);
+        return['success'=>true,'pattern'=>$pattern,'steps_taken'=>count($history),'final_alive'=>$history?end($history)['alive']:0,'grid_size'=>"{$width}x{$height}",'grid'=>$out,'history'=>$history];
     }
 }
