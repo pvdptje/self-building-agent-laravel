@@ -91,6 +91,13 @@ class AgentRun extends Command
             checkpoint: $this->option('forever')
                 ? fn (int $iteration): ?string => $this->gitCheckpoint($config, $iteration)
                 : null,
+            askHuman: function (string $question, string $context): ?string {
+                if ($context !== '') {
+                    $this->line("<fg=magenta>Human input requested:</> {$context}");
+                }
+
+                return $this->ask($question);
+            },
         );
 
         $forever = (bool) $this->option('forever');

@@ -30,6 +30,7 @@ class AgentRunner
      * @param array{allow_self_modify_system_prompt: bool, require_human_approval_for_prompt_switch: bool, allow_make_tool: bool, require_human_approval_for_new_tools: bool, allow_spawn_subagent?: bool} $modeConfig
      * @param array{max_prompt_switches_per_run: int, max_tools_created_per_run: int, autonomous_continue_message?: string, history_compress_chars?: ?int, max_tool_result_chars?: int, max_subagents_per_run?: int, max_generated_tools_per_request?: int} $limits
      * @param Closure(string): bool $approve Ask the human a yes/no question.
+     * @param Closure(string, string): string|null $askHuman Ask the human a free-form question and return their answer.
      * @param Closure(string, string): void $output Report progress to the human as (type, message). Types: iteration, thought, tool_call, tool_result, proposal, switch, system.
      * @param Closure(string): array{answer?: string, error?: string}|null $spawnSubagent Run a subtask in a separate process and return its answer.
      * @param Closure(int): ?string $checkpoint Snapshot the work so far (e.g. a git commit). Called at each open-ended nudge with the current iteration; may return a note for the agent (e.g. a stagnation warning).
@@ -47,6 +48,7 @@ class AgentRunner
         private Closure $output,
         private ?Closure $spawnSubagent = null,
         private ?Closure $checkpoint = null,
+        private ?Closure $askHuman = null,
     ) {
     }
 
@@ -114,7 +116,7 @@ class AgentRunner
                 // provider rejected the conversation outright, so a normal
                 // summarization round-trip would be rejected too. Drop old
                 // history hard, remember the size that failed, and retry once.
-                $failedSize = strlen(json_encode($messages, JSON_UNESCAPED_SLASHES) ?: '');
+                $failedSize = strlen($this->encodeJson($messages));
                 $this->learnedCompressChars = max(50_000, intdiv($failedSize, 2));
 
                 ($this->output)('system', "Provider reported a context overflow at ~{$failedSize} chars; emergency-truncating history and compressing earlier from now on.");
@@ -178,10 +180,20 @@ class AgentRunner
                 $name = $call['function']['name'] ?? '';
                 $arguments = json_decode($call['function']['arguments'] ?? '{}', true) ?: [];
 
-                ($this->output)('tool_call', "{$name}(".json_encode($arguments, JSON_UNESCAPED_SLASHES).')');
+                ($this->output)('tool_call', "{$name}(".$this->encodeJson($arguments).')');
 
                 $result = $this->dispatch($name, $arguments);
-                $resultJson = is_string($result) ? $result : json_encode($result, JSON_UNESCAPED_SLASHES);
+
+                if ($name === 'end_turn' && is_array($result) && ($result['finished'] ?? false)) {
+                    $finalAnswer = (string) ($result['answer'] ?? '');
+                    ($this->output)('tool_result', $finalAnswer);
+
+                    if (! $openEnded) {
+                        return $finalAnswer;
+                    }
+                }
+
+                $resultJson = is_string($result) ? $result : $this->encodeJson($result);
 
                 // Cap what goes into the model's history, so one giant tool
                 // result cannot blow the context window in a single call.
@@ -265,7 +277,7 @@ class AgentRunner
         $size = 0;
 
         for ($i = count($messages) - 1; $i >= 1; $i--) {
-            $size += strlen(json_encode($messages[$i], JSON_UNESCAPED_SLASHES) ?: '');
+            $size += strlen($this->encodeJson($messages[$i]));
 
             if ($size > $budget && $tail !== []) {
                 break;
@@ -312,7 +324,7 @@ class AgentRunner
             return;
         }
 
-        $size = strlen(json_encode($messages, JSON_UNESCAPED_SLASHES) ?: '');
+        $size = strlen($this->encodeJson($messages));
 
         if ($size <= $threshold) {
             return;
@@ -362,6 +374,9 @@ class AgentRunner
                 'read_prompt_resource' => $this->prompts->find((string) ($arguments['id'] ?? ''))
                     ?? ['error' => 'No prompt with that id.'],
                 'search_prompt_resources' => $this->prompts->search((string) ($arguments['query'] ?? '')),
+                'find_project_files' => $this->handleFindProjectFiles($arguments),
+                'end_turn' => $this->handleEndTurn($arguments),
+                'ask_human' => $this->handleAskHuman($arguments),
                 'list_generated_tools' => $this->handleListGeneratedTools($arguments),
                 'search_generated_tools' => $this->handleSearchGeneratedTools($arguments),
                 'suggest_system_prompt' => $this->handleSuggestSystemPrompt($arguments),
@@ -377,6 +392,153 @@ class AgentRunner
     }
 
     /**
+     * @param array<string, mixed> $arguments
+     */
+    private function handleAskHuman(array $arguments): array
+    {
+        $question = trim((string) ($arguments['question'] ?? ''));
+        $context = trim((string) ($arguments['context'] ?? ''));
+
+        if ($question === '') {
+            return ['error' => 'ask_human requires a non-empty question.'];
+        }
+
+        if ($this->askHuman === null) {
+            return ['error' => 'Human questions are not available in this run.'];
+        }
+
+        $answer = ($this->askHuman)($question, $context);
+
+        if ($answer === null || trim($answer) === '') {
+            return ['answered' => false, 'answer' => '', 'note' => 'The human provided no answer. Continue only if a safe default exists.'];
+        }
+
+        return ['answered' => true, 'answer' => $answer];
+    }
+
+    /**
+     * @param array<string, mixed> $arguments
+     */
+    private function handleEndTurn(array $arguments): array
+    {
+        $summary = trim((string) ($arguments['summary'] ?? ''));
+        $verification = trim((string) ($arguments['verification'] ?? ''));
+
+        if ($summary === '') {
+            return ['finished' => false, 'error' => 'end_turn requires a non-empty summary.'];
+        }
+
+        if ($this->containsQuestion($summary) || $this->containsQuestion($verification)) {
+            return [
+                'finished' => false,
+                'error' => 'end_turn is terminal and cannot ask follow-up questions. Call ask_human with the question, then continue from the answer.',
+            ];
+        }
+
+        $answer = $summary;
+
+        if ($verification !== '') {
+            $answer .= "\n\nVerification: {$verification}";
+        }
+
+        return ['finished' => true, 'answer' => $answer];
+    }
+
+    private function containsQuestion(string $text): bool
+    {
+        if ($text === '') {
+            return false;
+        }
+
+        if (str_contains($text, '?')) {
+            return true;
+        }
+
+        return (bool) preg_match('/\b(should I|shall I|do you want|want me to|would you like|can I|may I)\b/i', $text);
+    }
+
+    /**
+     * @param array<string, mixed> $arguments
+     */
+    private function handleFindProjectFiles(array $arguments): array
+    {
+        $query = trim((string) ($arguments['query'] ?? ''));
+        $path = trim((string) ($arguments['path'] ?? '.'));
+        $limit = max(1, min(200, (int) ($arguments['max_results'] ?? 40)));
+
+        if ($query === '') {
+            return ['error' => 'find_project_files requires a non-empty query.'];
+        }
+
+        return $this->findProjectFiles($query, $path, $limit);
+    }
+
+    /**
+     * @return array{query: string, root: string, total_matches: int, truncated: bool, files: array<int, string>}
+     */
+    private function findProjectFiles(string $query, string $path, int $limit): array
+    {
+        $projectRoot = realpath(base_path()) ?: base_path();
+        $path = ($path === '' || $path === '/' || preg_match('/^[A-Za-z]:[\\\\\/]?$/', $path)) ? '.' : $path;
+        $path = ltrim(str_replace('\\', '/', $path), '/');
+        $searchRoot = realpath($projectRoot.DIRECTORY_SEPARATOR.$path);
+
+        if ($searchRoot === false || ! str_starts_with(str_replace('\\', '/', $searchRoot), str_replace('\\', '/', $projectRoot))) {
+            $searchRoot = $projectRoot;
+            $path = '.';
+        }
+
+        $excludedDirs = ['.git', 'vendor', 'node_modules', '.idea', '.vscode'];
+        $matches = [];
+        $total = 0;
+        $hasWildcard = str_contains($query, '*') || str_contains($query, '?');
+        $needle = mb_strtolower(str_replace('\\', '/', $query));
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveCallbackFilterIterator(
+                new \RecursiveDirectoryIterator($searchRoot, \FilesystemIterator::SKIP_DOTS),
+                function (\SplFileInfo $file) use ($excludedDirs): bool {
+                    return ! ($file->isDir() && in_array($file->getFilename(), $excludedDirs, true));
+                },
+            ),
+        );
+
+        foreach ($iterator as $file) {
+            if (! $file instanceof \SplFileInfo || ! $file->isFile()) {
+                continue;
+            }
+
+            $absolute = str_replace('\\', '/', $file->getPathname());
+            $relative = ltrim(substr($absolute, strlen(str_replace('\\', '/', $projectRoot))), '/');
+            $candidate = mb_strtolower($relative);
+            $basename = mb_strtolower($file->getFilename());
+            $matched = $hasWildcard
+                ? fnmatch($needle, $candidate) || fnmatch($needle, $basename)
+                : str_contains($candidate, $needle) || str_contains($basename, $needle);
+
+            if (! $matched) {
+                continue;
+            }
+
+            $total++;
+
+            if (count($matches) < $limit) {
+                $matches[] = $relative;
+            }
+        }
+
+        sort($matches);
+
+        return [
+            'query' => $query,
+            'root' => $path === '.' ? '.' : $path,
+            'total_matches' => $total,
+            'truncated' => $total > count($matches),
+            'files' => $matches,
+        ];
+    }
+
+    /**
      * Find generated tool names that appear in recent conversation text. This
      * lets catalog search results pin matching executable schemas into the
      * next request without shipping every generated tool on every turn.
@@ -389,7 +551,7 @@ class AgentRunner
         $haystackParts = [];
 
         foreach (array_slice($messages, -12) as $message) {
-            $haystackParts[] = is_string($message['content'] ?? null) ? $message['content'] : json_encode($message, JSON_UNESCAPED_SLASHES);
+            $haystackParts[] = is_string($message['content'] ?? null) ? $message['content'] : $this->encodeJson($message);
         }
 
         $haystack = implode("\n", array_filter($haystackParts));
@@ -452,7 +614,7 @@ class AgentRunner
             return ['error' => 'Subagents are not available in this run.'];
         }
 
-        $max = $this->limits['max_subagents_per_run'] ?? 0;
+        $max = $this->limits['max_subagents_per_run'] ?? PHP_INT_MAX;
 
         if ($this->subagentsSpawned >= $max) {
             return ['error' => $this->limitReachedMessage('subagent')];
@@ -577,6 +739,8 @@ class AgentRunner
 
                 return ['created' => false, 'errors' => ['The human declined the new tool.']];
             }
+
+            $logEntry['approved'] = true;
         }
 
         $result = $this->toolMaker->make($name, $description, $schema, $code, $overwrite);
@@ -592,5 +756,18 @@ class AgentRunner
         $this->logger->toolChange($logEntry);
 
         return ['created' => true, 'note' => "Tool [{$name}] saved. It becomes available on the next iteration."];
+    }
+
+    private function encodeJson(mixed $value): string
+    {
+        $json = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+
+        if ($json !== false) {
+            return $json;
+        }
+
+        return json_encode([
+            'error' => 'Value could not be JSON-encoded: '.json_last_error_msg(),
+        ], JSON_UNESCAPED_SLASHES) ?: '{"error":"Value could not be JSON-encoded."}';
     }
 }

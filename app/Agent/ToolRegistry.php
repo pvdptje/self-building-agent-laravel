@@ -77,6 +77,52 @@ class ToolRegistry
             [
                 'type' => 'function',
                 'function' => [
+                    'name' => 'find_project_files',
+                    'description' => 'Find files by filename or relative path inside this project. Fast, bounded, and safer than content indexing; use this first when locating a file like AgentRunner.php.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'query' => ['type' => 'string', 'description' => 'Filename or path fragment to find, e.g. "AgentRunner.php" or "app/Agent". Supports * wildcards.'],
+                            'path' => ['type' => 'string', 'description' => 'Optional relative directory to search from. Defaults to project root. Absolute paths and "/" are treated as project root.'],
+                            'max_results' => ['type' => 'integer', 'description' => 'Maximum matches to return, 1-200. Defaults to 40.'],
+                        ],
+                        'required' => ['query'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'end_turn',
+                    'description' => 'Finish the current non-forever agent run immediately with a final answer. Use this only after the requested task is complete or blocked. Do not ask follow-up questions here; use ask_human first.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'summary' => ['type' => 'string', 'description' => 'Concise final answer for the human: what changed or what was found. Must be a statement, not a question.'],
+                            'verification' => ['type' => 'string', 'description' => 'Tests, linters, or checks run. If none ran, explain why.'],
+                        ],
+                        'required' => ['summary'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'ask_human',
+                    'description' => 'Ask the human one concise question, wait for their answer, then continue the run using that answer. Use this only when a choice or missing detail blocks progress.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'question' => ['type' => 'string', 'description' => 'The exact question to show the human. Keep it concise and include the default assumption if useful.'],
+                            'context' => ['type' => 'string', 'description' => 'Optional short context explaining why the answer is needed.'],
+                        ],
+                        'required' => ['question'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
                     'name' => 'list_generated_tools',
                     'description' => 'List the generated tool catalog without loading every tool schema into the model context. Use this when you need to discover available tools.',
                     'parameters' => [

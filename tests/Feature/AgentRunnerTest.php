@@ -26,7 +26,7 @@ function fakeAssistantText(string $text): array
     return ['choices' => [['message' => ['role' => 'assistant', 'content' => $text]]]];
 }
 
-function makeRunner(string $mode, array $modeConfig, bool $approve, string $workDir, array $extraLimits = [], ?Closure $spawnSubagent = null, ?Closure $checkpoint = null): AgentRunner
+function makeRunner(string $mode, array $modeConfig, bool|Closure $approve, string $workDir, array $extraLimits = [], ?Closure $spawnSubagent = null, ?Closure $checkpoint = null, ?Closure $askHuman = null): AgentRunner
 {
     $promptsDir = $workDir.'/prompts';
     $toolsDir = $workDir.'/tools';
@@ -50,10 +50,11 @@ function makeRunner(string $mode, array $modeConfig, bool $approve, string $work
         mode: $mode,
         modeConfig: $modeConfig,
         limits: array_merge(['max_prompt_switches_per_run' => 3, 'max_tools_created_per_run' => 10], $extraLimits),
-        approve: fn (string $question) => $approve,
+        approve: is_callable($approve) ? $approve : fn (string $question) => $approve,
         output: fn (string $type, string $message) => null,
         spawnSubagent: $spawnSubagent,
         checkpoint: $checkpoint,
+        askHuman: $askHuman,
     );
 }
 
@@ -164,6 +165,39 @@ it('declines a new tool when the human says no', function () {
         ->and($lineage[0]['tool'])->toBe('add_numbers_declined');
 });
 
+it('logs human approval when tool creation fails after approval', function () {
+    $toolName = 'approved_then_failed_'.uniqid();
+
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(fakeAssistantToolCall('make_tool', [
+            'name' => $toolName,
+            'description' => 'Return one.',
+            'parameters_schema' => ['type' => 'object', 'properties' => (object) []],
+            'code' => 'return 1;',
+        ]))
+        ->push(fakeAssistantText('done')),
+    ]);
+
+    $runner = makeRunner('sane', [
+        'allow_self_modify_system_prompt' => false,
+        'require_human_approval_for_prompt_switch' => true,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => true,
+    ], approve: function () use ($toolName) {
+        file_put_contents($this->workDir.'/tools/'.$toolName.'.php', '<?php // raced into existence');
+
+        return true;
+    }, workDir: $this->workDir);
+
+    $runner->run('Make a tool.', 'creative_experiment', 2);
+
+    $lineage = readLineage($this->workDir, 'tool-lineage.jsonl');
+
+    expect($lineage)->toHaveCount(1)
+        ->and($lineage[0]['approved'])->toBeTrue()
+        ->and($lineage[0]['errors'][0])->toContain('already exists');
+});
+
 it('creates a tool in madness mode and the agent can call it next iteration', function () {
     $toolName = 'triple_number_'.uniqid();
 
@@ -198,6 +232,36 @@ it('creates a tool in madness mode and the agent can call it next iteration', fu
         foreach ($request->data()['messages'] ?? [] as $message) {
             if (($message['role'] ?? '') === 'tool' && ($message['content'] ?? '') === '42') {
                 return true;
+            }
+        }
+
+        return false;
+    });
+});
+
+it('survives non UTF-8 tool results when serializing history', function () {
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(fakeAssistantToolCall('read_prompt_resource', ['id' => 'binary']))
+        ->push(fakeAssistantText('continued')),
+    ]);
+
+    $runner = makeRunner('sane', [
+        'allow_self_modify_system_prompt' => false,
+        'require_human_approval_for_prompt_switch' => true,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => true,
+    ], approve: false, workDir: $this->workDir);
+
+    file_put_contents($this->workDir.'/prompts/binary.system.md', "---\nid: binary\ntitle: Binary\ntags: [system]\n---\n\nBad byte: \xB1\n");
+
+    $answer = $runner->run('Read a prompt with bad bytes.', 'creative_experiment', 3);
+
+    expect($answer)->toBe('continued');
+
+    Http::assertSent(function ($request) {
+        foreach ($request->data()['messages'] ?? [] as $message) {
+            if (($message['role'] ?? '') === 'tool') {
+                return str_contains($message['content'] ?? '', 'Bad byte');
             }
         }
 
@@ -333,6 +397,32 @@ it('spawns a subagent and feeds its answer back to the model', function () {
     });
 });
 
+it('allows subagents when enabled even if no explicit subagent limit is configured', function () {
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(fakeAssistantToolCall('spawn_subagent', ['task' => 'summarize']))
+        ->push(fakeAssistantText('done')),
+    ]);
+
+    $calls = 0;
+
+    $runner = makeRunner('madness', [
+        'allow_self_modify_system_prompt' => true,
+        'require_human_approval_for_prompt_switch' => false,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => false,
+        'allow_spawn_subagent' => true,
+    ], approve: false, workDir: $this->workDir,
+        spawnSubagent: function () use (&$calls) {
+            $calls++;
+
+            return ['answer' => 'subagent answer'];
+        });
+
+    $runner->run('Spawn once.', 'creative_experiment', 3);
+
+    expect($calls)->toBe(1);
+});
+
 it('does not offer spawn_subagent when no spawn closure is wired', function () {
     Http::fake(['llm.test/*' => Http::sequence()->push(fakeAssistantText('done'))]);
 
@@ -413,6 +503,146 @@ it('reports lists and reads of prompt resources back to the model', function () 
     Http::assertSent(function ($request) {
         foreach ($request->data()['messages'] ?? [] as $message) {
             if (($message['role'] ?? '') === 'tool' && str_contains($message['content'] ?? '', 'You are a toolmaker')) {
+                return true;
+            }
+        }
+
+        return false;
+    });
+});
+
+it('finds project files from the project root even when given slash as the path', function () {
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(fakeAssistantToolCall('find_project_files', [
+            'query' => 'AgentRunner.php',
+            'path' => '/',
+            'max_results' => 10,
+        ]))
+        ->push(fakeAssistantText('found it')),
+    ]);
+
+    $runner = makeRunner('sane', [
+        'allow_self_modify_system_prompt' => false,
+        'require_human_approval_for_prompt_switch' => true,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => true,
+    ], approve: false, workDir: $this->workDir);
+
+    $answer = $runner->run('Find AgentRunner.php.', 'creative_experiment', 3);
+
+    expect($answer)->toBe('found it');
+
+    Http::assertSent(function ($request) {
+        foreach ($request->data()['messages'] ?? [] as $message) {
+            if (($message['role'] ?? '') !== 'tool') {
+                continue;
+            }
+
+            return str_contains($message['content'] ?? '', 'app/Agent/AgentRunner.php')
+                && str_contains($message['content'] ?? '', '"root":"."');
+        }
+
+        return false;
+    });
+});
+
+it('stops immediately when the agent calls end_turn', function () {
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(fakeAssistantToolCall('end_turn', [
+            'summary' => 'Updated the coding prompt.',
+            'verification' => 'Prompt repository test passed.',
+        ]))
+        ->push(fakeAssistantText('should not be requested')),
+    ]);
+
+    $runner = makeRunner('sane', [
+        'allow_self_modify_system_prompt' => false,
+        'require_human_approval_for_prompt_switch' => true,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => true,
+    ], approve: false, workDir: $this->workDir);
+
+    $answer = $runner->run('Finish once done.', 'creative_experiment', 12);
+
+    expect($answer)->toContain('Updated the coding prompt.')
+        ->and($answer)->toContain('Verification: Prompt repository test passed.');
+
+    expect(Http::recorded())->toHaveCount(1);
+});
+
+it('asks the human a question and continues with the answer', function () {
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(fakeAssistantToolCall('ask_human', [
+            'question' => 'Which file should I edit?',
+            'context' => 'Two matching files exist.',
+        ]))
+        ->push(fakeAssistantToolCall('end_turn', [
+            'summary' => 'I will edit app/Agent/AgentRunner.php.',
+            'verification' => 'No code changed.',
+        ])),
+    ]);
+
+    $questions = [];
+
+    $runner = makeRunner('sane', [
+        'allow_self_modify_system_prompt' => false,
+        'require_human_approval_for_prompt_switch' => true,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => true,
+    ], approve: false, workDir: $this->workDir,
+        askHuman: function (string $question, string $context) use (&$questions): string {
+            $questions[] = [$question, $context];
+
+            return 'app/Agent/AgentRunner.php';
+        });
+
+    $answer = $runner->run('Ask if blocked.', 'creative_experiment', 5);
+
+    expect($questions)->toBe([['Which file should I edit?', 'Two matching files exist.']])
+        ->and($answer)->toContain('AgentRunner.php');
+
+    Http::assertSent(function ($request) {
+        foreach ($request->data()['messages'] ?? [] as $message) {
+            if (($message['role'] ?? '') === 'tool' && str_contains($message['content'] ?? '', 'app/Agent/AgentRunner.php')) {
+                return true;
+            }
+        }
+
+        return false;
+    });
+});
+
+it('rejects follow-up questions inside end_turn so the agent can ask_human instead', function () {
+    Http::fake(['llm.test/*' => Http::sequence()
+        ->push(fakeAssistantToolCall('end_turn', [
+            'summary' => 'I reviewed the file. Want me to make item #2?',
+            'verification' => 'No code changed.',
+        ]))
+        ->push(fakeAssistantToolCall('ask_human', [
+            'question' => 'Should I make item #2?',
+            'context' => 'The review found several optional improvements.',
+        ]))
+        ->push(fakeAssistantToolCall('end_turn', [
+            'summary' => 'I will make item #2 in a follow-up pass.',
+            'verification' => 'No code changed.',
+        ])),
+    ]);
+
+    $runner = makeRunner('sane', [
+        'allow_self_modify_system_prompt' => false,
+        'require_human_approval_for_prompt_switch' => true,
+        'allow_make_tool' => true,
+        'require_human_approval_for_new_tools' => true,
+    ], approve: false, workDir: $this->workDir,
+        askHuman: fn () => 'yes');
+
+    $answer = $runner->run('Review and maybe ask.', 'creative_experiment', 5);
+
+    expect($answer)->toContain('I will make item #2');
+
+    Http::assertSent(function ($request) {
+        foreach ($request->data()['messages'] ?? [] as $message) {
+            if (($message['role'] ?? '') === 'tool' && str_contains($message['content'] ?? '', 'cannot ask follow-up questions')) {
                 return true;
             }
         }
