@@ -159,3 +159,5 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 92. **sqlite_backup** — First database backup/export tool. 4 modes: SQL dump (CREATE+INSERT, 29KB/358 lines), CSV (per-table), schema-only, table listing. Verified on web_monitor.sqlite (5 tables, FTS5 support). New domain: data persistence/backup. 274 tools.
 93. **sqlite_backup** — First DB backup/export tool. 4 modes: SQL dump (29KB, 358 lines), CSV (per-table), schema, tables list. 274 tools.
 94. **project_analyzer** — First project/codebase analysis tool. Scanned project: Laravel 13.x, 654 files (329 PHP), 42.8MB, 27 classes/466 funcs/52K lines, 60 dirs, 11 packages, 707ms. New domain: codebase intelligence. 275 tools.
+95. **project_analyzer** — First codebase analysis tool. Scanned project: Laravel 13.x, 654 files, 42.8MB, 27 classes/466 funcs/52K lines, 707ms. New domain: codebase intelligence. 275 tools.
+96. **hex_dump** — First hex/binary file viewer. Classic hexdump format with offset, hex bytes, ASCII. Configurable (16-65536 bytes, 8-64 per line, offset start). Magic byte detection (25+ formats: PNG/GIF/JPEG/PDF/WAV/ZIP/ELF/PE...). New domain: binary file analysis. 276 tools.
