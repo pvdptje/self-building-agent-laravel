@@ -51,7 +51,10 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 34. Dual-unit ocean data — unit_converter pipeline
 35. Holiday countdown — date_calculator pipeline
 36. **Operational integrity** — tool_test_harness + API health →
-    202/202 tools pass lint, 12/13 APIs operational, all DBs verified.
-    Ecosystem health score: 98/100. First operational assessment.
+36. Operational integrity — 202/202 pass, 98/100 health
+37. **Weather alert digest** — weather_alerts (CA) → 3 active alerts.
+37. Weather alert digest — 3 active CA alerts
+38. **Scheduled multi-source report** — scheduled_report (HN + weather +
+    GitHub). 3 sources, 0 errors, 2.5KB markdown. First automated digest pipeline.
 
-## Final — 36 frontiers. 31 reports. 27 tools. 14 domains. 0 new tools.
+## Final — 38 frontiers. 33 reports. 29 tools. 15 domains. 0 new tools.
