@@ -58,6 +58,11 @@ data_anonymizer, web_page_metadata, web_scraper_simple
     5 breweries: 10 Barrel (large), 13 Virtues (brewpub), Alameda (micro×2),
     Allagash (regional, ME). First food/drink data via composition.
 
+25. Brewery discovery — Open Brewery DB via http_fetch
+26. **Supply chain trace (Coca-Cola)** — food_product_lookup + country_info × 4.
+    26-country distribution, 4 continents, GDP range $2.7K→$49K.
+    First global supply chain analysis.
+
 ## Queued
 gutenberg_search, db_backup, image_format_converter
 
