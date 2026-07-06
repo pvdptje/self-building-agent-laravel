@@ -16,7 +16,7 @@ $toolDefinition_service_orchestrator = array (
         'mode' => 
         array (
           'type' => 'string',
-          'description' => '\'name_demographics\' — predict nationality (nationalize.io) + age (agify.io) from a name. \'topic_overview\' — Wikipedia summary (via REST API) + GitHub repo count for a topic.',
+          'description' => 'Mode: \'name_demographics\' — predict nationality (nationalize.io) + age (agify.io) from a name. \'topic_overview\' — Wikipedia summary (via REST API) + GitHub repo count for a topic.',
         ),
         'query' => 
         array (
@@ -41,216 +41,57 @@ $toolDefinition_service_orchestrator = array (
 if (! function_exists('service_orchestrator')) {
     function service_orchestrator($mode, $query, $timeout = null)
     {
-        // Service Orchestrator — call two live APIs, join results
-        $mode = $mode ?? 'name_demographics';
-        $query = $query ?? '';
-        $timeout = $timeout ?? 15;
+        // Service orchestrator - two APIs, one report
+        $mode=isset($mode)?(string)$mode:'';
+        $query=isset($query)?(string)$query:'';
+        $timeout=isset($timeout)?min(max((int)$timeout,5),30):15;
+        if($mode===''||$query==='')return['error'=>'mode and query required'];
 
-        if (empty($query)) {
-            return ['error' => 'query is required', 'success' => false];
-        }
-        $timeout = max(5, min(30, (int)$timeout));
+        $ctx=stream_context_create(['http'=>['timeout'=>$timeout,'header'=>"User-Agent: PHP-Orchestrator/1.0\r\n"]]);
 
-        // Helper: fetch JSON from URL
-        function orch_fetch($url, $timeout) {
-            $ctx = stream_context_create([
-                'http' => [
-                    'method' => 'GET',
-                    'timeout' => $timeout,
-                    'header' => "User-Agent: service_orchestrator/1.0\r\nAccept: application/json\r\n",
-                    'ignore_errors' => true,
-                ],
-                'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
-            ]);
-            
-            $start = microtime(true);
-            $body = @file_get_contents($url, false, $ctx);
-            $elapsed = round((microtime(true) - $start) * 1000);
-            
-            $status = 200;
-            if (isset($http_response_header)) {
-                foreach ($http_response_header as $h) {
-                    if (preg_match('#^HTTP/\d+\.\d+ (\d+)#', $h, $m)) $status = (int)$m[1];
-                }
-            }
-            
-            if ($body === false) {
-                $err = error_get_last();
-                return ['error' => $err['message'] ?? 'fetch failed', 'status' => 0, 'elapsed_ms' => $elapsed, 'success' => false];
-            }
-            
-            $data = @json_decode($body, true);
-            if ($data === null) {
-                return ['error' => 'Invalid JSON response', 'status' => $status, 'elapsed_ms' => $elapsed, 'success' => false];
-            }
-            
-            return ['data' => $data, 'status' => $status, 'elapsed_ms' => $elapsed, 'success' => true];
-        }
-
-        // Helper: fetch text from URL
-        function orch_fetch_text($url, $timeout) {
-            $ctx = stream_context_create([
-                'http' => [
-                    'method' => 'GET',
-                    'timeout' => $timeout,
-                    'header' => "User-Agent: service_orchestrator/1.0\r\n",
-                    'ignore_errors' => true,
-                ],
-                'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
-            ]);
-            
-            $start = microtime(true);
-            $body = @file_get_contents($url, false, $ctx);
-            $elapsed = round((microtime(true) - $start) * 1000);
-            
-            $status = 200;
-            if (isset($http_response_header)) {
-                foreach ($http_response_header as $h) {
-                    if (preg_match('#^HTTP/\d+\.\d+ (\d+)#', $h, $m)) $status = (int)$m[1];
-                }
-            }
-            
-            return ['text' => $body !== false ? $body : '', 'status' => $status, 'elapsed_ms' => $elapsed, 'success' => $body !== false];
-        }
-
-        if ($mode === 'name_demographics') {
-            $name = urlencode($query);
-            
-            // Call both APIs in parallel-ish (sequential but both timeouts independent)
-            $nat_result = orch_fetch("https://api.nationalize.io/?name=$name", $timeout);
-            $age_result = orch_fetch("https://api.agify.io/?name=$name", $timeout);
-            
-            $consolidated = [
-                'mode' => 'name_demographics',
-                'query' => $query,
-                'success' => $nat_result['success'] || $age_result['success'],
-                'services' => [],
-            ];
-            
-            if ($nat_result['success']) {
-                $nat = $nat_result['data'];
-                $top_countries = [];
-                if (isset($nat['country']) && is_array($nat['country'])) {
-                    $top_countries = array_slice($nat['country'], 0, 5);
-                }
-                $consolidated['services']['nationalize.io'] = [
-                    'status' => $nat_result['status'],
-                    'response_time_ms' => $nat_result['elapsed_ms'],
-                    'name' => $nat['name'] ?? $query,
-                    'estimated_count' => $nat['count'] ?? 0,
-                    'top_countries' => $top_countries,
-                ];
-            } else {
-                $consolidated['services']['nationalize.io'] = [
-                    'status' => $nat_result['status'],
-                    'error' => $nat_result['error'],
-                    'response_time_ms' => $nat_result['elapsed_ms'],
-                ];
-            }
-            
-            if ($age_result['success']) {
-                $age = $age_result['data'];
-                $consolidated['services']['agify.io'] = [
-                    'status' => $age_result['status'],
-                    'response_time_ms' => $age_result['elapsed_ms'],
-                    'name' => $age['name'] ?? $query,
-                    'estimated_age' => $age['age'] ?? null,
-                    'age_count' => $age['count'] ?? 0,
-                ];
-            } else {
-                $consolidated['services']['agify.io'] = [
-                    'status' => $age_result['status'],
-                    'error' => $age_result['error'],
-                    'response_time_ms' => $age_result['elapsed_ms'],
-                ];
-            }
-            
-            // Synthesis: if both succeeded, build a profile
-            if ($nat_result['success'] && $age_result['success']) {
-                $top = $top_countries[0] ?? null;
-                $age_val = $age['age'] ?? null;
-                $profile = "Name: $query";
-                if ($age_val !== null) {
-                    $profile .= ", estimated age: $age_val";
-                }
-                if ($top) {
-                    $profile .= ", most likely nationality: {$top['country_id']} (probability: " . round($top['probability'] * 100, 1) . "%)";
-                }
-                $consolidated['synthesis'] = $profile;
-            }
-            
-            return $consolidated;
-            
-        } elseif ($mode === 'topic_overview') {
-            $topic = urlencode($query);
-            
-            // Wikipedia summary
-            $wiki_url = "https://en.wikipedia.org/api/rest_v1/page/summary/" . urlencode($query);
-            $wiki_result = orch_fetch($wiki_url, $timeout);
-            
-            // GitHub repo search
-            $gh_url = "https://api.github.com/search/repositories?q=" . urlencode($query) . "&per_page=5&sort=stars";
-            $gh_result = orch_fetch($gh_url, $timeout);
-            
-            $consolidated = [
-                'mode' => 'topic_overview',
-                'query' => $query,
-                'success' => $wiki_result['success'] || $gh_result['success'],
-                'services' => [],
-            ];
-            
-            if ($wiki_result['success']) {
-                $wiki = $wiki_result['data'];
-                $consolidated['services']['wikipedia'] = [
-                    'status' => $wiki_result['status'],
-                    'response_time_ms' => $wiki_result['elapsed_ms'],
-                    'title' => $wiki['title'] ?? '',
-                    'description' => $wiki['description'] ?? '',
-                    'extract' => isset($wiki['extract']) ? mb_substr($wiki['extract'], 0, 1000) : '',
-                    'url' => $wiki['content_urls']['desktop']['page'] ?? $wiki_url,
-                ];
-            } else {
-                $consolidated['services']['wikipedia'] = [
-                    'status' => $wiki_result['status'],
-                    'error' => $wiki_result['error'] ?? 'Wikipedia API error',
-                    'response_time_ms' => $wiki_result['elapsed_ms'],
-                ];
-            }
-            
-            if ($gh_result['success']) {
-                $gh = $gh_result['data'];
-                $repos = [];
-                if (isset($gh['items']) && is_array($gh['items'])) {
-                    foreach (array_slice($gh['items'], 0, 5) as $repo) {
-                        $repos[] = [
-                            'name' => $repo['full_name'] ?? '',
-                            'stars' => $repo['stargazers_count'] ?? 0,
-                            'description' => mb_substr($repo['description'] ?? '', 0, 200),
-                            'url' => $repo['html_url'] ?? '',
-                        ];
+        switch($mode){
+            case 'name_demographics':
+                $n=urlencode($query);
+                $nat=@file_get_contents("https://api.nationalize.io/?name={$n}",false,$ctx);
+                $age=@file_get_contents("https://api.agify.io/?name={$n}",false,$ctx);
+                
+                $r=['success'=>true,'mode'=>'name_demographics','name'=>$query];
+                if($nat){
+                    $nd=json_decode($nat,true);
+                    if($nd&&isset($nd['country'])){
+                        $r['nationality']=$nd['country'];
+                        $r['top_country']=$nd['country'][0]['country_id']??null;
+                        $r['top_probability']=$nd['country'][0]['probability']??0;
                     }
                 }
-                $consolidated['services']['github'] = [
-                    'status' => $gh_result['status'],
-                    'response_time_ms' => $gh_result['elapsed_ms'],
-                    'total_repos' => $gh['total_count'] ?? 0,
-                    'top_repos' => $repos,
-                ];
-            } else {
-                $consolidated['services']['github'] = [
-                    'status' => $gh_result['status'],
-                    'error' => $gh_result['error'] ?? 'GitHub API error',
-                    'response_time_ms' => $gh_result['elapsed_ms'],
-                ];
-            }
-            
-            return $consolidated;
-            
-        } else {
-            return [
-                'error' => "Unknown mode: $mode. Supported: 'name_demographics', 'topic_overview'",
-                'success' => false,
-            ];
+                if($age){
+                    $ad=json_decode($age,true);
+                    if($ad&&isset($ad['age']))$r['age']=['predicted'=>$ad['age'],'count'=>$ad['count']??0];
+                }
+                return$r;
+                
+            case 'topic_overview':
+                $t=urlencode($query);
+                $wiki=@file_get_contents("https://en.wikipedia.org/api/rest_v1/page/summary/{$t}",false,$ctx);
+                $gh=@file_get_contents("https://api.github.com/search/repositories?q={$t}&sort=stars&per_page=1",false,stream_context_create(['http'=>['timeout'=>$timeout,'header'=>"User-Agent: PHP-Orch/1.0\r\n"]]));
+                
+                $r=['success'=>true,'mode'=>'topic_overview','topic'=>$query];
+                if($wiki){
+                    $wd=json_decode($wiki,true);
+                    if($wd&&!isset($wd['title'])){
+                        $r['wikipedia_error']=$wd['detail']??'unknown';
+                    }elseif($wd){
+                        $r['wikipedia']=['title'=>$wd['title']??'','extract'=>substr($wd['extract']??'',0,500),'url'=>$wd['content_urls']['desktop']['page']??''];
+                    }
+                }
+                if($gh){
+                    $gd=json_decode($gh,true);
+                    if($gd&&isset($gd['total_count']))$r['github']=['repositories'=>$gd['total_count'],'top_repo'=>$gd['items'][0]['full_name']??null,'top_stars'=>$gd['items'][0]['stargazers_count']??0];
+                }
+                return$r;
+                
+            default:
+                return['error'=>"Unknown mode: {$mode}"];
         }
     }
 }
