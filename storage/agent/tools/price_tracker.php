@@ -59,489 +59,114 @@ $toolDefinition_price_tracker = array (
 if (! function_exists('price_tracker')) {
     function price_tracker($url = null, $selector = null, $name = null, $db_name = null, $timeout = null, $mode = null, $currency = null)
     {
-            $url = $url ?? '';
-            $selector = $selector ?? '';
-            $name = $name ?? '';
-            $db_name = $db_name ?? 'price_tracker.sqlite';
-            $timeout = $timeout ?? 20;
-            $mode = $mode ?? 'check_report';
-            $currency = $currency ?? '';
+        // Price Tracker - monitor e-commerce prices
+        $url=isset($url)?(string)$url:'';
+        $selector=isset($selector)?(string)$selector:'';
+        $name=isset($name)?(string)$name:'';
+        $db_name=isset($db_name)?(string)$db_name:'price_tracker.sqlite';
+        $timeout=isset($timeout)?min(max((int)$timeout,5),30):20;
+        $mode=isset($mode)?(string)$mode:'check_report';
+        $currency=isset($currency)?(string)$currency:'';
 
-            $timeout = max(5, min(30, (int)$timeout));
+        $ws=realpath(__DIR__.'/../../workspace');
+        $db_path=$ws.'/'.$db_name;
+        $pdo=new PDO("sqlite:{$db_path}");
+        $pdo->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
+        $pdo->exec("CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,url TEXT,selector TEXT,currency TEXT)");
+        $pdo->exec("CREATE TABLE IF NOT EXISTS price_history(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER,price REAL,currency TEXT,checked_at TEXT)");
 
-            if (empty($url) && !in_array($mode, ['report', 'list'])) {
-                return ['success' => false, 'error' => 'URL is required for check/add/history modes.'];
+        if($mode==='list'){
+            $stmt=$pdo->query("SELECT p.id,p.name,p.url,COUNT(ph.id) as checks,MAX(ph.price) as max_price,MIN(ph.price) as min_price,MAX(ph.checked_at) as last_check FROM products p LEFT JOIN price_history ph ON p.id=ph.product_id GROUP BY p.id");
+            return['success'=>true,'mode'=>'list','products'=>$stmt->fetchAll(PDO::FETCH_ASSOC)];
+        }
+
+        if($mode==='report'||$mode==='history'){
+            if($url!==''&&$mode==='history'){
+                $stmt=$pdo->prepare("SELECT ph.*,p.name,p.url FROM price_history ph JOIN products p ON p.id=ph.product_id WHERE p.url=? ORDER BY ph.checked_at DESC LIMIT 50");
+                $stmt->execute([$url]);
+            }else{
+                $stmt=$pdo->query("SELECT p.id,p.name,p.url,COUNT(ph.id) as checks,ROUND(AVG(ph.price),2) as avg_price,MIN(ph.price) as min_price,MAX(ph.price) as max_price,MAX(ph.checked_at) as last_check FROM products p LEFT JOIN price_history ph ON p.id=ph.product_id GROUP BY p.id");
             }
+            return['success'=>true,'mode'=>$mode,'data'=>$stmt->fetchAll(PDO::FETCH_ASSOC)];
+        }
 
-            $db_path = __DIR__ . '/../workspace/' . $db_name;
+        if($url==='')return['error'=>'URL required for check mode'];
 
-            // Initialize database
-            try {
-                $pdo = new PDO("sqlite:$db_path");
-                $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-                // Products table
-                $pdo->exec("CREATE TABLE IF NOT EXISTS tracked_products (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    url TEXT NOT NULL UNIQUE,
-                    name TEXT,
-                    selector TEXT DEFAULT '',
-                    currency TEXT DEFAULT '',
-                    added_at TEXT DEFAULT (datetime('now')),
-                    active INTEGER DEFAULT 1
-                )");
-                // Price history table
-                $pdo->exec("CREATE TABLE IF NOT EXISTS price_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    product_id INTEGER NOT NULL,
-                    price REAL,
-                    price_text TEXT,
-                    currency TEXT DEFAULT '',
-                    checked_at TEXT DEFAULT (datetime('now')),
-                    FOREIGN KEY (product_id) REFERENCES tracked_products(id)
-                )");
-            } catch (Exception $e) {
-                return ['success' => false, 'error' => 'Database init failed: ' . $e->getMessage()];
-            }
+        // Extract domain for name
+        if($name===''){
+            $parsed=parse_url($url);
+            $name=$parsed['host']??$url;
+        }
 
-            $result = ['success' => true, 'mode' => $mode, 'db' => $db_name];
+        // Fetch page
+        $page=@file_get_contents($url,false,stream_context_create(['http'=>['timeout'=>$timeout,'header'=>"User-Agent: Mozilla/5.0\r\n"],'ssl'=>['verify_peer'=>false,'verify_peer_name'=>false]]));
+        if($page===false)return['error'=>'Fetch failed'];
 
-            // --- list mode ---
-            if ($mode === 'list') {
-                $products = $pdo->query("SELECT id, url, name, selector, added_at, active FROM tracked_products ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-                $result['products'] = $products;
-                $result['count'] = count($products);
-                return $result;
-            }
+        // Extract price
+        $doc=new DOMDocument();
+        @$doc->loadHTML('<?xml encoding="utf-8"?>'.$page);
+        $xpath=new DOMXPath($doc);
 
-            // --- report mode ---
-            if ($mode === 'report') {
-                $products = $pdo->query("SELECT id, url, name, selector, added_at FROM tracked_products WHERE active = 1 ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-                $report = [];
-                foreach ($products as $p) {
-                    $latest = $pdo->prepare("SELECT price, price_text, currency, checked_at FROM price_history WHERE product_id = ? ORDER BY checked_at DESC LIMIT 1");
-                    $latest->execute([$p['id']]);
-                    $latest_price = $latest->fetch(PDO::FETCH_ASSOC);
+        $price_text='';
+        $found_selector='';
 
-                    $first = $pdo->prepare("SELECT price, checked_at FROM price_history WHERE product_id = ? ORDER BY checked_at ASC LIMIT 1");
-                    $first->execute([$p['id']]);
-                    $first_price = $first->fetch(PDO::FETCH_ASSOC);
-
-                    $all = $pdo->prepare("SELECT price FROM price_history WHERE product_id = ? AND price IS NOT NULL ORDER BY checked_at ASC");
-                    $all->execute([$p['id']]);
-                    $prices = $all->fetchAll(PDO::FETCH_COLUMN);
-
-                    $lowest = !empty($prices) ? min($prices) : null;
-                    $highest = !empty($prices) ? max($prices) : null;
-                    $avg = !empty($prices) ? round(array_sum($prices) / count($prices), 2) : null;
-
-                    $entry = [
-                        'id' => $p['id'],
-                        'name' => $p['name'] ?: $p['url'],
-                        'url' => $p['url'],
-                        'selector' => $p['selector'],
-                    ];
-
-                    if ($latest_price) {
-                        $entry['current_price'] = $latest_price['price'];
-                        $entry['current_price_text'] = $latest_price['price_text'];
-                        $entry['currency'] = $latest_price['currency'];
-                        $entry['last_checked'] = $latest_price['checked_at'];
-                        $entry['check_count'] = count($prices);
-                    }
-                    if ($first_price) {
-                        $entry['first_price'] = $first_price['price'];
-                        $entry['first_checked'] = $first_price['checked_at'];
-                    }
-                    $entry['lowest_price'] = $lowest;
-                    $entry['highest_price'] = $highest;
-                    $entry['average_price'] = $avg;
-
-                    if ($latest_price && $first_price && $first_price['price'] && $latest_price['price']) {
-                        $change = round($latest_price['price'] - $first_price['price'], 2);
-                        $pct = $first_price['price'] > 0 ? round(($change / $first_price['price']) * 100, 1) : 0;
-                        $entry['change_from_first'] = $change;
-                        $entry['change_pct'] = $pct;
-                    }
-
-                    $report[] = $entry;
-                }
-
-                $result['report'] = $report;
-                $result['total_products'] = count($report);
-                return $result;
-            }
-
-            // --- history mode ---
-            if ($mode === 'history') {
-                if (empty($url)) {
-                    return ['success' => false, 'error' => 'URL is required for history mode.'];
-                }
-                $product = $pdo->prepare("SELECT id, name, url FROM tracked_products WHERE url = ?");
-                $product->execute([$url]);
-                $p = $product->fetch(PDO::FETCH_ASSOC);
-                if (!$p) {
-                    return ['success' => false, 'error' => "Product not found: $url"];
-                }
-                $history = $pdo->prepare("SELECT price, price_text, currency, checked_at FROM price_history WHERE product_id = ? ORDER BY checked_at DESC LIMIT 100");
-                $history->execute([$p['id']]);
-                $entries = $history->fetchAll(PDO::FETCH_ASSOC);
-
-                $prices_clean = array_filter(array_column($entries, 'price'), function($v) { return $v !== null; });
-
-                $result['product'] = $p;
-                $result['history'] = $entries;
-                $result['stats'] = [
-                    'count' => count($entries),
-                    'min' => !empty($prices_clean) ? min($prices_clean) : null,
-                    'max' => !empty($prices_clean) ? max($prices_clean) : null,
-                    'avg' => !empty($prices_clean) ? round(array_sum($prices_clean) / count($prices_clean), 2) : null,
-                ];
-                return $result;
-            }
-
-            // --- add mode ---
-            if ($mode === 'add') {
-                if (empty($url)) {
-                    return ['success' => false, 'error' => 'URL is required.'];
-                }
-                $friendly_name = $name ?: preg_replace('#^https?://#', '', $url);
-                $friendly_name = substr($friendly_name, 0, 100);
-                try {
-                    $stmt = $pdo->prepare("INSERT OR IGNORE INTO tracked_products (url, name, selector, currency) VALUES (?, ?, ?, ?)");
-                    $stmt->execute([$url, $friendly_name, $selector, $currency]);
-                    if ($stmt->rowCount() > 0) {
-                        $result['added'] = true;
-                        $result['name'] = $friendly_name;
-                        $result['message'] = "Added '$friendly_name' to tracking.";
-                    } else {
-                        $result['added'] = false;
-                        $result['message'] = 'Product already being tracked.';
-                    }
-                } catch (Exception $e) {
-                    return ['success' => false, 'error' => 'Failed to add: ' . $e->getMessage()];
-                }
-                return $result;
-            }
-
-            // --- check / check_report mode ---
-
-            // Helper: fetch URL content
-            $fetch_page = function($url, $timeout) {
-                $ctx = stream_context_create([
-                    'http' => [
-                        'method' => 'GET',
-                        'timeout' => $timeout,
-                        'header' => "User-Agent: price_tracker/1.0 (PHP)\r\nAccept: text/html,application/xhtml+xml\r\n",
-                        'ignore_errors' => true,
-                    ],
-                    'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
-                ]);
-                $body = @file_get_contents($url, false, $ctx);
-                if ($body === false) {
-                    return ['error' => error_get_last()['message'] ?? 'Fetch failed'];
-                }
-                $status = 200;
-                if (isset($http_response_header)) {
-                    foreach ($http_response_header as $h) {
-                        if (preg_match('#^HTTP/\d+\.\d+ (\d+)#', $h, $m)) { $status = (int)$m[1]; break; }
-                    }
-                }
-                if ($status >= 400) {
-                    return ['error' => "HTTP $status"];
-                }
-                return ['body' => $body, 'status' => $status];
-            };
-
-            // Helper: extract price from HTML using selector or auto-detection
-            $extract_price = function($html, $selector, $currency_hint) {
-                if (empty(trim($html))) {
-                    return ['error' => 'Empty HTML content'];
-                }
-
-                // Suppress DOM warnings for malformed HTML
-                $dom = new DOMDocument();
-                $old = libxml_use_internal_errors(true);
-                $dom->loadHTML('<?xml encoding="utf-8" ?>' . $html);
-                libxml_use_internal_errors($old);
-                $xpath = new DOMXPath($dom);
-
-                $price_text = null;
-                $price_value = null;
-
-                // Strategy 1: Use explicit selector (CSS or XPath)
-                if (!empty($selector)) {
-                    // Detect if it's XPath (starts with // or ./ or ( )
-                    if (preg_match('#^[\./\(]#', $selector)) {
-                        $nodes = @$xpath->evaluate($selector);
-                        if ($nodes && $nodes->length > 0) {
-                            $price_text = trim($nodes->item(0)->textContent);
-                        }
-                    } else {
-                        // Simple CSS-to-XPath conversion for common patterns
-                        // Handle class selectors: .price → //*[contains(concat(' ',normalize-space(@class),' '),' price ')]
-                        // Handle ID selectors: #price → //*[@id='price']
-                        // Handle element: span.price → //span[contains(concat(' ',normalize-space(@class),' '),' price ')]
-                        $parts = preg_split('/\s+/', trim($selector));
-                        $xpath_expr = '';
-                        foreach ($parts as $part) {
-                            $elem = '*';
-                            $class = '';
-                            $id = '';
-                            if (preg_match('/^([a-zA-Z0-9]+)/', $part, $m)) {
-                                $elem = $m[1];
-                            }
-                            if (preg_match('/#([a-zA-Z0-9_-]+)/', $part, $m)) {
-                                $id = $m[1];
-                                $xpath_expr .= "//{$elem}[@id='{$id}']";
-                            } elseif (preg_match_all('/\.([a-zA-Z0-9_-]+)/', $part, $m)) {
-                                $classes = $m[1];
-                                $clauses = [];
-                                foreach ($classes as $c) {
-                                    $clauses[] = "contains(concat(' ',normalize-space(@class),' '),' {$c} ')";
-                                }
-                                $xpath_expr .= "//{$elem}[" . implode(' and ', $clauses) . "]";
-                            } else {
-                                $xpath_expr .= "//{$elem}";
-                            }
-                        }
-                        if (!empty($xpath_expr)) {
-                            $nodes = @$xpath->evaluate($xpath_expr);
-                            if ($nodes && $nodes->length > 0) {
-                                $price_text = trim($nodes->item(0)->textContent);
-                            }
-                        }
-                    }
-                }
-
-                // Strategy 2: Auto-detect price using common patterns
-                if (empty($price_text)) {
-                    // Try common Amazon/Oliver/Shopify price patterns
-                    $price_patterns = [
-                        '//span[contains(concat(" ",normalize-space(@class)," ")," a-price-whole ")]',
-                        '//span[@id="priceblock_ourprice"]',
-                        '//span[@id="priceblock_dealprice"]',
-                        '//span[@class="price"]',
-                        '//span[contains(@class,"price")]',
-                        '//div[contains(@class,"price")]',
-                        '//p[contains(@class,"price")]',
-                        '//meta[@itemprop="price"]/@content',
-                        '//*[@itemprop="price"]/@content',
-                        '//*[@itemprop="price"]',
-                        '//span[contains(@class,"product-price")]',
-                        '//span[contains(@class,"current-price")]',
-                        '//div[contains(@class,"product__price")]',
-                        '//span[contains(@class,"woocommerce-Price-amount")]',
-                        '//ins//span[contains(@class,"woocommerce-Price-amount")]',
-                        '//bdi', // WooCommerce
-                    ];
-
-                    foreach ($price_patterns as $pattern) {
-                        $nodes = @$xpath->evaluate($pattern);
-                        if ($nodes && $nodes->length > 0) {
-                            $price_text = trim($nodes->item(0)->textContent);
-                            if (!empty($price_text)) {
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Strategy 3: Regex fallback - find any price-like text in the page
-                if (empty($price_text)) {
-                    $body_text = $dom->textContent;
-                    // Look for patterns like $19.99, £29.99, €39.99, ¥4999
-                    $currency_patterns = [
-                        '/([\$\£\€\¥])\s*([0-9]+[,]?[0-9]*\.[0-9]{2})/',
-                        '/([0-9]+[,]?[0-9]*\.[0-9]{2})\s*([\$\£\€\¥])/',
-                        '/([0-9,]+)\.[0-9]{2}/',
-                    ];
-                    foreach ($currency_patterns as $pat) {
-                        if (preg_match_all($pat, $body_text, $matches)) {
-                            // Pick the most frequently occurring price
-                            $candidates = [];
-                            foreach ($matches[0] as $idx => $match) {
-                                $val = preg_replace('/[^0-9.]/', '', $match);
-                                $val = (float)$val;
-                                if ($val > 0 && $val < 10000000) {
-                                    $candidates[] = ['text' => trim($match), 'value' => $val];
-                                }
-                            }
-                            if (!empty($candidates)) {
-                                // If currency hint, prefer matches with that symbol
-                                if (!empty($currency_hint)) {
-                                    $filtered = array_filter($candidates, function($c) use ($currency_hint) {
-                                        return strpos($c['text'], $currency_hint) !== false;
-                                    });
-                                    if (!empty($filtered)) {
-                                        $candidates = array_values($filtered);
-                                    }
-                                }
-                                // Pick the first reasonable price
-                                $price_text = $candidates[0]['text'];
-                                $price_value = $candidates[0]['value'];
-                                // Found via regex, break out
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (empty($price_text)) {
-                    return ['error' => 'Could not find price on page. Provide a CSS selector or XPath.'];
-                }
-
-                // Parse price to numeric value
-                if ($price_value === null) {
-                    // Remove currency symbols, commas, and whitespace
-                    $clean = preg_replace('/[^0-9.]/', '', $price_text);
-                    $price_value = (float)$clean;
-                }
-
-                // Detect currency from text
-                $detected_currency = '';
-                if (strpos($price_text, '$') !== false) $detected_currency = '$';
-                elseif (strpos($price_text, '£') !== false) $detected_currency = '£';
-                elseif (strpos($price_text, '€') !== false) $detected_currency = '€';
-                elseif (strpos($price_text, '¥') !== false) $detected_currency = '¥';
-
-                if ($price_value <= 0 || $price_value > 99999999) {
-                    return ['error' => "Invalid price parsed: '$price_text' -> $price_value"];
-                }
-
-                return [
-                    'price_text' => $price_text,
-                    'price_value' => $price_value,
-                    'currency' => $detected_currency,
-                ];
-            };
-
-            // Get or create product record
-            $product_stmt = $pdo->prepare("SELECT id, name, selector, currency FROM tracked_products WHERE url = ?");
-            $product_stmt->execute([$url]);
-            $product = $product_stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$product) {
-                // Auto-add to tracking
-                $friendly_name = $name ?: preg_replace('#^https?://#', '', $url);
-                $friendly_name = substr($friendly_name, 0, 100);
-                $insert = $pdo->prepare("INSERT OR IGNORE INTO tracked_products (url, name, selector, currency) VALUES (?, ?, ?, ?)");
-                $insert->execute([$url, $friendly_name, $selector, $currency]);
-                $product_id = $pdo->lastInsertId();
-                $product = [
-                    'id' => $product_id,
-                    'name' => $friendly_name,
-                    'selector' => $selector,
-                    'currency' => $currency,
-                ];
-            } else {
-                $product_id = $product['id'];
-                // Use provided selector if given, otherwise use stored one
-                if (!empty($selector)) {
-                    $product['selector'] = $selector;
-                }
-                if (!empty($currency)) {
-                    $product['currency'] = $currency;
-                }
-            }
-
-            // Fetch the page
-            $page = $fetch_page($url, $timeout);
-            if (isset($page['error'])) {
-                return ['success' => false, 'error' => "Failed to fetch URL: {$page['error']}"];
-            }
-
-            // Extract price
-            $effective_selector = $product['selector'] ?? $selector;
-            $effective_currency = $product['currency'] ?? $currency;
-            $price_result = $extract_price($page['body'], $effective_selector, $effective_currency);
-
-            if (isset($price_result['error'])) {
-                return [
-                    'success' => false,
-                    'error' => $price_result['error'],
-                    'url' => $url,
-                    'product' => $product['name'] ?? $url,
-                    'hint' => 'Try providing a CSS selector like ".price" or XPath like "//span[@class=\"price\"]".',
-                ];
-            }
-
-            // Store to history
-            $insert_price = $pdo->prepare("INSERT INTO price_history (product_id, price, price_text, currency) VALUES (?, ?, ?, ?)");
-            $insert_price->execute([
-                $product_id,
-                $price_result['price_value'],
-                $price_result['price_text'],
-                $price_result['currency'],
-            ]);
-
-            // Get previous price for change detection
-            $prev = $pdo->prepare("SELECT price, checked_at FROM price_history WHERE product_id = ? AND id != (SELECT MAX(id) FROM price_history WHERE product_id = ?) ORDER BY checked_at DESC LIMIT 1");
-            $prev->execute([$product_id, $product_id]);
-            $previous = $prev->fetch(PDO::FETCH_ASSOC);
-
-            $change = null;
-            $change_pct = null;
-            if ($previous && $previous['price'] !== null && $previous['price'] > 0) {
-                $change = round($price_result['price_value'] - $previous['price'], 2);
-                $change_pct = round(($change / $previous['price']) * 100, 1);
-            }
-
-            // Get all-time stats
-            $stats = $pdo->prepare("SELECT MIN(price) as min_price, MAX(price) as max_price, AVG(price) as avg_price, COUNT(*) as checks FROM price_history WHERE product_id = ? AND price IS NOT NULL");
-            $stats->execute([$product_id]);
-            $all_stats = $stats->fetch(PDO::FETCH_ASSOC);
-
-            $check_result = [
-                'product' => $product['name'] ?: $url,
-                'url' => $url,
-                'current_price' => $price_result['price_value'],
-                'price_text' => $price_result['price_text'],
-                'currency' => $price_result['currency'],
-                'checked_at' => date('Y-m-d H:i:s'),
+        // Try XPath or CSS selector
+        if($selector!==''){
+            $nodes=$xpath->query($selector);
+            if($nodes&&$nodes->length>0)$price_text=trim($nodes->item(0)->textContent);
+        }else{
+            // Auto-detect
+            $patterns=[
+                '//*[@id="priceblock_ourprice"]','//*[contains(@class,"price")]',
+                '//*[contains(@class,"Price")]','//*[@itemprop="price"]',
+                '//*[contains(@class,"a-price")]//span[contains(@class,"a-offscreen")]',
             ];
-
-            if ($previous) {
-                $check_result['previous_price'] = $previous['price'];
-                $check_result['previous_checked'] = $previous['checked_at'];
-                $check_result['change'] = $change;
-                $check_result['change_pct'] = $change_pct;
+            foreach($patterns as$p){
+                $nodes=$xpath->query($p);
+                if($nodes&&$nodes->length>0){$price_text=trim($nodes->item(0)->textContent);$found_selector=$p;break;}
             }
+        }
 
-            $check_result['all_time'] = [
-                'lowest' => (float)$all_stats['min_price'],
-                'highest' => (float)$all_stats['max_price'],
-                'average' => round((float)$all_stats['avg_price'], 2),
-                'total_checks' => (int)$all_stats['checks'],
-            ];
+        if($price_text==='')return['error'=>'Price not found on page','page_snippet'=>substr($page,0,500)];
 
-            if ($mode === 'check') {
-                $result['check'] = $check_result;
-                return $result;
-            }
+        // Clean price
+        $price_clean=preg_replace('/[^0-9.,]/','',$price_text);
+        // Handle European format (1.234,56 -> 1234.56)
+        if(str_contains($price_clean,',')&&(!str_contains($price_clean,'.')||strrpos($price_clean,',')>strrpos($price_clean,'.'))){
+            $price_clean=str_replace('.','',$price_clean);
+            $price_clean=str_replace(',','.',$price_clean);
+        }
+        // Handle US format (remove commas)
+        $price_clean=str_replace(',','',$price_clean);
+        $price_value=(float)$price_clean;
 
-            // --- check_report mode ---
-            $result['check'] = $check_result;
+        if($price_value<=0)return['error'=>"Invalid price: {$price_clean}"];
 
-            // Generate report of all tracked products
-            $products_all = $pdo->query("SELECT id, url, name FROM tracked_products WHERE active = 1 ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-            $report = [];
-            foreach ($products_all as $p) {
-                $latest = $pdo->prepare("SELECT price, price_text, currency, checked_at FROM price_history WHERE product_id = ? ORDER BY checked_at DESC LIMIT 1");
-                $latest->execute([$p['id']]);
-                $lp = $latest->fetch(PDO::FETCH_ASSOC);
-                if ($lp) {
-                    $report[] = [
-                        'name' => $p['name'] ?: $p['url'],
-                        'url' => $p['url'],
-                        'current_price' => $lp['price'],
-                        'price_text' => $lp['price_text'],
-                        'currency' => $lp['currency'],
-                        'last_checked' => $lp['checked_at'],
-                    ];
-                }
-            }
-            $result['all_products'] = $report;
+        // Auto-detect currency
+        if($currency===''){
+            if(str_contains($price_text,'€')||str_contains($price_text,'&euro;'))$currency='EUR';
+            elseif(str_contains($price_text,'£')||str_contains($price_text,'&pound;'))$currency='GBP';
+            elseif(str_contains($price_text,'¥')||str_contains($price_text,'&yen;'))$currency='JPY';
+            else $currency='USD';
+        }
 
-            return $result;
+        // Store product
+        $stmt=$pdo->prepare("INSERT OR IGNORE INTO products(name,url,selector,currency) VALUES(?,?,?,?)");
+        $stmt->execute([$name,$url,$found_selector?:$selector,$currency]);
+        $product_id=$pdo->lastInsertId()?:$pdo->query("SELECT id FROM products WHERE url=".$pdo->quote($url))->fetchColumn();
+
+        // Record price
+        $stmt=$pdo->prepare("INSERT INTO price_history(product_id,price,currency,checked_at) VALUES(?,?,?,datetime('now'))");
+        $stmt->execute([$product_id,$price_value,$currency]);
+
+        // Get previous price
+        $stmt=$pdo->prepare("SELECT price,checked_at FROM price_history WHERE product_id=? AND id!=(SELECT MAX(id) FROM price_history WHERE product_id=?) ORDER BY id DESC LIMIT 1");
+        $stmt->execute([$product_id,$product_id]);
+        $prev=$stmt->fetch(PDO::FETCH_ASSOC);
+
+        $change=null;
+        if($prev)$change=['from'=>$prev['price'],'to'=>$price_value,'diff'=>round($price_value-$prev['price'],2),'pct'=>round(($price_value-$prev['price'])/$prev['price']*100,1)];
+
+        return['success'=>true,'product'=>$name,'price'=>$price_value,'currency'=>$currency,'change'=>$change,'selector_used'=>$found_selector?:$selector,'mode'=>'check','db'=>$db_name];
     }
 }
