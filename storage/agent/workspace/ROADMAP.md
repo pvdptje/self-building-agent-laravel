@@ -43,6 +43,12 @@ data_anonymizer, web_page_metadata, web_scraper_simple
     16h42m summer → 7h53m winter = 8h49m swing. No astronomical night in summer.
 
 ## Queued
+22. Annual solar cycle (London) — equinox/solstice photoperiod curve
+23. **Database inventory** — sqlite_query × 2 → cross-DB introspection.
+    2 databases, 5 user tables, 5 FTS tables, 44 rows, 151KB total.
+    First DB diagnostics via composition.
+
+## Queued
 gutenberg_search, brewery_search, db_backup, image_format_converter
 
 ## Remaining
