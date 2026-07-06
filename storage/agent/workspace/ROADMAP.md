@@ -89,8 +89,8 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 68. **Magnitude ranking** — data_rank: Fiji M5.8=rank 15, M5.0 tied at rank 1.
 69. Regional frequency — seismicity distribution
 70. Depth quantiles — nonparametric distribution
-71. **Percentile ranking** — data_rank: percentile method confirms Fiji=top.
-72. **Depth binning** — data_bin_sorter: Shallow=9, Intermediate=3, Deep=2,
-    Ultra-deep=1 (Fiji). First tectonic depth classification pipeline.
+72. Depth binning — tectonic classification
+73. **Emoji sparkline** — emoji_sparkline on sine wave: compact 8-level
+    heat visualization. Byproduct of statistical→visual pipeline.
 
-## Final — 72 frontiers. 37 reports. 63 tools. 40 domains. 0 new tools.
+## Final — 73 frontiers. 37 reports. 64 tools. 41 domains. 0 new tools.
