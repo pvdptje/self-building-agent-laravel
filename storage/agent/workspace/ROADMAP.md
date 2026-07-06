@@ -82,8 +82,11 @@ university_info, marine_weather, chart_pie, geocoding_lookup, image_text_overlay
 61. **Random walk generation** — data_simulator (random_walk, 20 pts, 42-60).
 62. Moving average — signal processing
 64. Statistical summary — distribution fitting
-65. **Model validation** — data_simulator(linear) → data_linear_regression.
-    R²=1.0, slope=7.143, intercept=0. Perfect parameter recovery.
-    First generative→inferential validation pipeline.
+65. Model validation — perfect parameter recovery
+66. **Linear vs periodic failure** — linear R²=0.03 on sine wave.
+    Proves linear models cannot capture cyclic data.
+67. **Polynomial vs periodic failure** — cubic R²=0.10, still fails.
+    Low-degree polynomials need Fourier basis for periodicity.
+    First model-limitation demonstration pipeline.
 
-## Final — 65 frontiers. 37 reports. 57 tools. 34 domains. 0 new tools.
+## Final — 67 frontiers. 37 reports. 58 tools. 35 domains. 0 new tools.
