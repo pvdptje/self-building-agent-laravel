@@ -47,3 +47,7 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 5. **IRC bot** — Connect to IRC via raw TCP, join channels, respond to commands.
 6. **IMAP/POP3 client** — Fetch emails using standard protocols.
 7. **System resource monitor** — CPU, memory, disk usage via PHP functions.
+
+1. websocket_client + redis_client + postgresql_query + mongodb_query — 4 new tools, live Binance WS→PG→Redis pipeline verified.
+2. system_profiler — First FFI (Foreign Function Interface) tool. Calls kernel32!GetTickCount64, GetSystemInfo, GlobalMemoryStatusEx, GetComputerNameA, GetCurrentProcessId. Returns uptime (12h 54m), RAM (31.74GB total), CPU (16-core ARM64), hostname. No PHP function provides this data. Fixed ARM64 struct layout bug.
+3. image_generator_procedural — First procedural/fractal image generation tool. 8 modes: mandelbrot (256×192, 80 iters, 59ms), julia, gradient (6-color, 45°, 8ms), plasma, spiral (7-color, 5 turns, 115ms), noise, checkerboard (16px cells, 5.6ms), circles. Composes with color_palette_generator + image_text_overlay for full art pipeline.
