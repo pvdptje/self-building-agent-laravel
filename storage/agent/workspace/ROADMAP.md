@@ -66,3 +66,5 @@ Network protocols: HTTP/S, DNS, WHOIS, WebSocket, SSL/TLS.
 16. pdf_generator — Pure PHP PDF 1.4 (header, xref, streams, Courier font). libmagic-verified valid. Composable with charts/images. Hardest single tool built.
 17. shared_memory + file_lock — First IPC/cross-process primitives. shmop (create/write/read/delete segments) + flock-based file locking (exclusive/shared/try, blocking/non-blocking).
 18. pdf_generator v2 — JPEG/PNG image embedding via XObjects. chart_generator (bar chart) embeded in PDF ✓. libmagic validated. Cross-tool composition: chart → PDF.
+19. shared_memory+file_lock+pdf_generator_v2 — IPC (shmop segments + flock locks) + PDF image embedding (chart XObject verified).
+20. image_exif_reader — First EXIF/camera metadata tool. Uses exif_imagetype/exif_read_data/exif_thumbnail. Reads camera make/model, exposure, GPS, dates, copyright. GPS coordinate converter. Tested on 5 JPEGs (COMPUTED/FILE/COMMENT sections parsed).
